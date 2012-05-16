@@ -246,6 +246,16 @@ expr(#c_tuple{anno=Anno,es=Es0}=Tuple, Ctxt, Sub) ->
 	value ->
 	    ann_c_tuple(Anno, Es)
     end;
+expr(#c_map{var=V0,es=Es0}=Map, Ctxt, Sub) ->
+    Es = pair_list(Es0, Ctxt, Sub),
+    case Ctxt of
+	effect ->
+	    add_warning(Map, useless_building),
+	    expr(make_effect_seq(Es, Sub), Ctxt, Sub);
+	value ->
+	    V = expr(V0, Ctxt, Sub),
+	    Map#c_map{var=V,es=Es}
+    end;
 expr(#c_binary{segments=Ss}=Bin0, Ctxt, Sub) ->
     %% Warn for useless building, but always build the binary
     %% anyway to preserve a possible exception.
@@ -376,6 +386,16 @@ expr(#c_try{anno=A,arg=E0,vars=Vs0,body=B0,evars=Evs0,handler=H0}=Try, _, Sub0) 
 
 expr_list(Es, Ctxt, Sub) ->
     [expr(E, Ctxt, Sub) || E <- Es].
+
+pair_list(Es, Ctxt, Sub) ->
+    [pair(E, Ctxt, Sub) || E <- Es].
+
+pair(#c_map_pair{key=K,val=V}, effect, Sub) ->
+    make_effect_seq([K,V], Sub);
+pair(#c_map_pair{key=K0,val=V0}=Pair, value=Ctxt, Sub) ->
+    K = expr(K0, Ctxt, Sub),
+    V = expr(V0, Ctxt, Sub),
+    Pair#c_map_pair{key=K,val=V}.
 
 bitstr_list(Es, Sub) ->
     [bitstr(E, Sub) || E <- Es].
@@ -1469,6 +1489,9 @@ pattern(#c_cons{anno=Anno,hd=H0,tl=T0}, Isub, Osub0) ->
 pattern(#c_tuple{anno=Anno,es=Es0}, Isub, Osub0) ->
     {Es1,Osub1} = pattern_list(Es0, Isub, Osub0),
     {ann_c_tuple(Anno, Es1),Osub1};
+pattern(#c_map{anno=Anno,es=Es0}=Map, Isub, Osub0) ->
+    {Es1,Osub1} = map_pair_pattern_list(Es0, Isub, Osub0),
+    {Map#c_map{anno=Anno,es=Es1},Osub1};
 pattern(#c_binary{segments=V0}=Pat, Isub, Osub0) ->
     {V1,Osub1} = bin_pattern_list(V0, Isub, Osub0),
     {Pat#c_binary{segments=V1},Osub1};
@@ -1477,6 +1500,15 @@ pattern(#c_alias{var=V0,pat=P0}=Pat, Isub, Osub0) ->
     {P1,Osub2} = pattern(P0, Isub, Osub1),
     Osub = update_types(V1, [P1], Osub2),
     {Pat#c_alias{var=V1,pat=P1},Osub}.
+
+map_pair_pattern_list(Ps0, Isub, Osub0) ->
+    {Ps,{_,Osub}} = mapfoldl(fun map_pair_pattern/2, {Isub,Osub0}, Ps0),
+    {Ps,Osub}.
+
+map_pair_pattern(#c_map_pair{key=K0,val=V0}=Pair, {Isub,Osub0}) ->
+    {K,Osub1} = pattern(K0, Isub, Osub0),
+    {V,Osub} = pattern(V0, Isub, Osub1),
+    {Pair#c_map_pair{key=K,val=V},{Isub,Osub}}.
 
 bin_pattern_list(Ps0, Isub, Osub0) ->
     {Ps,{_,Osub}} = mapfoldl(fun bin_pattern/2, {Isub,Osub0}, Ps0),
@@ -1676,6 +1708,9 @@ will_match_lit(Tuple, #c_tuple{es=Es}) ->
 	true -> will_match_lit_list(tuple_to_list(Tuple), Es);
 	false -> no
     end;
+will_match_lit(_LiteralOfWrongType, #c_map{}) ->
+    %% There are no map literals yet
+    no;
 will_match_lit(Bin, #c_binary{}) ->
     case is_bitstring(Bin) of
 	true -> maybe;
