@@ -1357,6 +1357,11 @@ pattern({cons,_Line,H,T}, Vt, Old,  Bvt, St0) ->
     {vtmerge_pat(Hvt, Tvt),vtmerge_pat(Bvt1,Bvt2),St2};
 pattern({tuple,_Line,Ps}, Vt, Old, Bvt, St) ->
     pattern_list(Ps, Vt, Old, Bvt, St);
+pattern({map,_Line,Ps}, Vt, Old, Bvt, St) ->
+    pattern_list(Ps, Vt, Old, Bvt, St);
+pattern({map_field,_Line,_,P}, Vt, Old, Bvt0, St0) ->
+    {Pvt,Bvt,St1} = pattern(P, Vt, Old, Bvt0, St0),
+    {Pvt,Bvt,St1};
 %%pattern({struct,_Line,_Tag,Ps}, Vt, Old, Bvt, St) ->
 %%    pattern_list(Ps, Vt, Old, Bvt, St);
 pattern({record_index,Line,Name,Field}, _Vt, _Old, _Bvt, St) ->
@@ -1744,6 +1749,12 @@ gexpr({cons,_Line,H,T}, Vt, St) ->
     gexpr_list([H,T], Vt, St);
 gexpr({tuple,_Line,Es}, Vt, St) ->
     gexpr_list(Es, Vt, St);
+gexpr({map,_Line,Es}, Vt, St) ->
+    gexpr_list(Es, Vt, St);
+gexpr({map,_Line,Src,Es}, Vt, St) ->
+    gexpr_list([Src|Es], Vt, St);
+gexpr({map_field,_Line,K,V}, Vt, St) ->
+    gexpr_list([K,V], Vt, St);
 gexpr({record_index,Line,Name,Field}, _Vt, St) ->
     check_record(Line, Name, St,
                  fun (Dfs, St1) -> record_field(Field, Name, Dfs, St1) end );
@@ -1961,6 +1972,12 @@ expr({bc,_Line,E,Qs}, Vt, St) ->
     handle_comprehension(E, Qs, Vt, St);
 expr({tuple,_Line,Es}, Vt, St) ->
     expr_list(Es, Vt, St);
+expr({map,_Line,Es}, Vt, St) ->
+    expr_list(Es, Vt, St);
+expr({map,_Line,Src,Es}, Vt, St) ->
+    expr_list([Src|Es], Vt, St);
+expr({map_field,_Line,K,V}, Vt, St) ->
+    expr_list([K,V], Vt, St);
 expr({record_index,Line,Name,Field}, _Vt, St) ->
     check_record(Line, Name, St,
                  fun (Dfs, St1) -> record_field(Field, Name, Dfs, St1) end);
