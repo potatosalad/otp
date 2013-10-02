@@ -588,6 +588,7 @@ bif map:keys/1
 bif map:new/0
 bif map:put/3
 bif map:remove/2
+bif map:update/3
 bif map:values/1
 
 #

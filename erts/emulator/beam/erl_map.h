@@ -33,11 +33,12 @@ typedef struct map_s {
  *
  * -----------
  * Eterm   THING	
- * Eterm   Keys -> {K1, K2, K3, ..., Kn} where n = arity
+ * Uint    size
+ * Eterm   Keys -> {K1, K2, K3, ..., Kn} where n = size
  * ----
  * Eterm   V1
  * ...
- * Eterm   Vn, where n = arity
+ * Eterm   Vn, where n = size
  * -----------
  */
 

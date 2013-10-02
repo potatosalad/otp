@@ -45,6 +45,7 @@
  * - map:put/3
  * - map:remove/2
  * - map:to_list/1
+ * - map:update/3
  * - map:values/1
  *
  * TODO:
@@ -54,7 +55,6 @@
  * - map:foldr/3
  * - map:map/3
  * - map:size/1
- * - map:update/3
  * - map:without/2
  * - map:merge/2
  *
@@ -417,6 +417,69 @@ BIF_RETTYPE map_remove_2(BIF_ALIST_2) {
     }
     BIF_ERROR(BIF_P, BADARG);
 }
+
+/* map:update/3
+ */
+
+BIF_RETTYPE map_update_3(BIF_ALIST_3) {
+    if (is_map(BIF_ARG_3)) {
+	Sint n,i;
+	Sint found = 0;
+	Eterm* hp,*shp;
+	Eterm *ks,*vs, res, key;
+	map_t *mp = (map_t*)map_val(BIF_ARG_3);
+
+	key = BIF_ARG_1;
+	n   = map_get_size(mp);
+
+	if (n == 0) {
+	    BIF_ERROR(BIF_P, BADARG);
+	}
+
+	ks  = map_get_keys(mp);
+	vs  = map_get_values(mp);
+
+	/* only allocate for values,
+	 * assume key-tuple will be intact
+	 */
+
+	hp  = HAlloc(BIF_P, 3 + n);
+	shp = hp;
+	res = make_map(hp);
+	*hp++ = MAP_HEADER;
+	*hp++ = n;
+	*hp++ = mp->keys;
+
+	if (is_immed(key)) {
+	    for( i = 0; i < n; i ++) {
+		if (ks[i] == key) {
+		    *hp++ = BIF_ARG_2;
+		    vs++;
+		    found = 1;
+		} else {
+		    *hp++ = *vs++;
+		}
+	    }
+	} else {
+	    for( i = 0; i < n; i ++) {
+		if (eq(ks[i], key)) {
+		    *hp++ = BIF_ARG_2;
+		    vs++;
+		    found = 1;
+		} else {
+		    *hp++ = *vs++;
+		}
+	    }
+	}
+
+	if (found)
+	    BIF_RET(res);
+
+	HRelease(BIF_P, shp + 3 + n, shp);
+    }
+    BIF_ERROR(BIF_P, BADARG);
+}
+
 
 /* map:values/1
  */
