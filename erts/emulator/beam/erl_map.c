@@ -318,7 +318,7 @@ BIF_RETTYPE map_put_3(BIF_ALIST_3) {
 	ASSERT(n >= 0);
 
 	/* copy map in order */
-	while (n && ((c = cmp(*ks, key)) < 0)) {
+	while (n && ((c = CMP(*ks, key)) < 0)) {
 	    *shp++ = *ks++;
 	    *hp++  = *vs++;
 	    n--;
