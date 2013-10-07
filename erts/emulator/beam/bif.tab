@@ -583,6 +583,7 @@ ubif erlang:is_map/1
 ubif erlang:map_size/1
 bif map:to_list/1
 bif map:get/2
+bif map:from_list/1
 bif map:is_key/2
 bif map:keys/1
 bif map:new/0

@@ -39,6 +39,7 @@
  * - erlang:map_size/1
  *
  * - map:get/2
+ * - map:from_list/1
  * - map:is_key/2
  * - map:keys/1
  * - map:new/0
@@ -49,7 +50,6 @@
  * - map:values/1
  *
  * TODO:
- * - map:from_list/1
  * - map:find/2
  * - map:foldl/3
  * - map:foldr/3
@@ -149,6 +149,127 @@ error:
 	BIF_P->fvalue = TUPLE2(hp, error, key);
 	BIF_ERROR(BIF_P, EXC_ERROR_2);
     }
+    BIF_ERROR(BIF_P, BADARG);
+}
+
+/* map:from_list/1
+ * List may be unsorted [{K,V}]
+ */
+
+BIF_RETTYPE map_from_list_1(BIF_ALIST_1) {
+    Eterm *kv, item = BIF_ARG_1;
+    Eterm *hp, *thp,*vs, *ks, keys, res;
+    map_t *mp;
+    Uint  size = 0, unused_size = 0;
+    Sint  c = 0;
+    Sint  idx = 0;
+
+    if (is_list(item) || is_nil(item)) {
+
+	/* Calculate size and check validity */
+
+	while(is_list(item)) {
+	    res = CAR(list_val(item));
+	    if (is_not_tuple(res))
+		goto error;
+
+	    kv = tuple_val(res);
+	    if (*kv != make_arityval(2))
+		goto error;
+
+	    size++;
+	    item = CDR(list_val(item));
+	}
+
+	if (is_not_nil(item))
+	    goto error;
+
+	hp    = HAlloc(BIF_P, 3 + 1 + (2 * size));
+	thp   = hp;
+	keys  = make_tuple(hp);
+	*hp++ = make_arityval(size);
+	ks    = hp;
+	hp   += size;
+	mp    = (map_t*)hp;
+	res   = make_map(mp);
+	hp   += 3;
+	vs    = hp;
+
+	mp->thing_word = MAP_HEADER;
+	mp->size = size; /* set later, might shrink*/
+	mp->keys = keys;
+
+	if (size == 0)
+	    BIF_RET(res);
+
+	item  = BIF_ARG_1;
+
+	/* first entry */
+	kv    = tuple_val(CAR(list_val(item)));
+	ks[0] = kv[1];
+	vs[0] = kv[2];
+	size  = 1;
+	item  = CDR(list_val(item));
+
+	/* insert sort key/value pairs */
+	while(is_list(item)) {
+
+	    kv = tuple_val(CAR(list_val(item)));
+
+	    /* compare ks backwards
+	     * idx represent word index to be written (hole position).
+	     * We cannot copy the elements when searching since we might
+	     * have an equal key. So we search for just the index first =(
+	     *
+	     * It is perhaps faster to move the values in the first pass.
+	     * Check for uniqueness during insert phase and then have a
+	     * second phace compacting the map if duplicates are found
+	     * during insert. .. or do someother sort .. shell-sort perhaps.
+	     */
+
+	    idx = size;
+
+	    while(idx > 0 && (c = CMP(kv[1],ks[idx-1])) < 0) { idx--; }
+
+	    if (c == 0) {
+		/* last compare was equal,
+		 * i.e. we have to release memory
+		 * and overwrite that key/value
+		 */
+		ks[idx-1] = kv[1];
+		vs[idx-1] = kv[2];
+		unused_size++;
+	    } else {
+		Uint i = size;
+		while(i > idx) {
+		    ks[i] = ks[i-1];
+		    vs[i] = vs[i-1];
+		    i--;
+		}
+		ks[idx] = kv[1];
+		vs[idx] = kv[2];
+		size++;
+	    }
+	    item = CDR(list_val(item));
+	}
+
+	if (unused_size) {
+	    /* the key tuple is embedded in the heap
+	     * write a bignum to clear it.
+	     */
+	    /* release values as normal since they are on the top of the heap */
+
+	    ks[size] = make_pos_bignum_header(unused_size - 1);
+	    HRelease(BIF_P, vs + size + unused_size, vs + size);
+	}
+
+	*thp = make_arityval(size);
+	mp->size = size;
+	BIF_RET(res);
+    }
+
+error:
+
     BIF_ERROR(BIF_P, BADARG);
 }
 
