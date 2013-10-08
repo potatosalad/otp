@@ -3141,7 +3141,7 @@ dec_term_atom_common:
 		hp   += size;
 
 		mp    = (map_t*)hp;
-		hp   += 3;
+		hp   += MAP_HEADER_SIZE;
 		vptr  = hp;
 		hp   += size;
 

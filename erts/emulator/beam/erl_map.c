@@ -192,7 +192,7 @@ BIF_RETTYPE map_from_list_1(BIF_ALIST_1) {
 	hp   += size;
 	mp    = (map_t*)hp;
 	res   = make_map(mp);
-	hp   += 3;
+	hp   += MAP_HEADER_SIZE;
 	vs    = hp;
 
 	mp->thing_word = MAP_HEADER;

@@ -60,6 +60,7 @@ typedef struct map_s {
 #define map_get_size(x)        (((map_t*)(x))->size)
 
 #define MAP_HEADER             _make_header(1,_TAG_HEADER_MAP)
+#define MAP_HEADER_SIZE        (sizeof(map_t) / sizeof(Eterm))
 
 #endif
 
