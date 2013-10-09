@@ -38,8 +38,9 @@
  * - erlang:is_map/1
  * - erlang:map_size/1
  *
- * - map:get/2
+ * - map:find/2
  * - map:from_list/1
+ * - map:get/2
  * - map:is_key/2
  * - map:keys/1
  * - map:new/0
@@ -50,7 +51,6 @@
  * - map:values/1
  *
  * TODO:
- * - map:find/2
  * - map:foldl/3
  * - map:foldr/3
  * - map:map/3
@@ -107,7 +107,39 @@ BIF_RETTYPE map_to_list_1(BIF_ALIST_1) {
     BIF_ERROR(BIF_P, BADARG);
 }
 
+/* map:find/2
+ * return value if key *equals* a key in the map
+ */
+
+BIF_RETTYPE map_find_2(BIF_ALIST_2) {
+    if (is_map(BIF_ARG_2)) {
+	Eterm *hp, *ks,*vs, key, res;
+	map_t *mp;
+	Uint n,i;
+
+	mp  = (map_t*)map_val(BIF_ARG_2);
+	key = BIF_ARG_1;
+	n   = map_get_size(mp);
+	ks  = map_get_keys(mp);
+	vs  = map_get_values(mp);
+
+	for( i = 0; i < n; i++) {
+	    if (CMP(ks[i], key)==0) {
+		hp    = HAlloc(BIF_P, 3);
+		res   = make_tuple(hp);
+		*hp++ = make_arityval(2);
+		*hp++ = am_ok;
+		*hp++ = vs[i];
+		BIF_RET(res);
+	    }
+	}
+	BIF_RET(am_error);
+    }
+    BIF_ERROR(BIF_P, BADARG);
+}
 /* map:get/2
+ * return value if key *matches* a key in the map
+ * exception bad_key if none matches
  */
 
 BIF_RETTYPE map_get_2(BIF_ALIST_2) {
