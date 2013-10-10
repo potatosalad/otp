@@ -43,6 +43,7 @@
  * - map:get/2
  * - map:is_key/2
  * - map:keys/1
+ * - map:merge/2
  * - map:new/0
  * - map:put/3
  * - map:remove/2
@@ -56,7 +57,6 @@
  * - map:map/3
  * - map:size/1
  * - map:without/2
- * - map:merge/2
  *
  */
 
@@ -366,7 +366,92 @@ BIF_RETTYPE map_keys_1(BIF_ALIST_1) {
     }
     BIF_ERROR(BIF_P, BADARG);
 }
+/* map:merge/2
+ */
 
+BIF_RETTYPE map_merge_2(BIF_ALIST_2) {
+    if (is_map(BIF_ARG_1) && is_map(BIF_ARG_2)) {
+	Eterm *hp,*thp;
+	Eterm tup;
+	Eterm *ks,*vs,*ks1,*vs1,*ks2,*vs2;
+	map_t *mp1,*mp2,*mp_new;
+	Uint n1,n2,i1,i2,need,unused_size=0;
+	int c = 0;
+
+	mp1  = (map_t*)map_val(BIF_ARG_1);
+	mp2  = (map_t*)map_val(BIF_ARG_2);
+	n1   = map_get_size(mp1);
+	n2   = map_get_size(mp2);
+
+	need = MAP_HEADER_SIZE + 1 + 2*(n1 + n2);
+
+	hp     = HAlloc(BIF_P, need);
+	thp    = hp;
+	tup    = make_tuple(thp);
+	ks     = hp + 1; hp += 1 + n1 + n2;
+	mp_new = (map_t*)hp; hp += MAP_HEADER_SIZE;
+	vs     = hp; hp += n1 + n2;
+
+	mp_new->thing_word = MAP_HEADER;
+	mp_new->size = 0;
+	mp_new->keys = tup;
+
+	i1  = 0; i2 = 0;
+	ks1 = map_get_keys(mp1);
+	vs1 = map_get_values(mp1);
+	ks2 = map_get_keys(mp2);
+	vs2 = map_get_values(mp2);
+
+	while(i1 < n1 && i2 < n2) {
+	    c = CMP(ks1[i1],ks2[i2]);
+	    if ( c == 0) {
+		/* use righthand side arguments map value,
+		 * but advance both maps */
+		*ks++ = ks2[i2];
+		*vs++ = vs2[i2];
+		i1++, i2++, unused_size++;
+	    } else if ( c < 0) {
+		*ks++ = ks1[i1];
+		*vs++ = vs1[i1];
+		i1++;
+	    } else {
+		*ks++ = ks2[i2];
+		*vs++ = vs2[i2];
+		i2++;
+	    }
+	}
+
+	/* copy remaining */
+	while (i1 < n1) {
+	    *ks++ = ks1[i1];
+	    *vs++ = vs1[i1];
+	    i1++;
+	}
+
+	while (i2 < n2) {
+	    *ks++ = ks2[i2];
+	    *vs++ = vs2[i2];
+	    i2++;
+	}
+
+	if (unused_size) {
+	    /* the key tuple is embedded in the heap, write a bignum to clear it.
+	     *
+	     * release values as normal since they are on the top of the heap
+	     * size = n1 + n1 - unused_size
+	     */
+
+	    *ks = make_pos_bignum_header(unused_size - 1);
+	    HRelease(BIF_P, vs + unused_size, vs);
+	}
+
+	mp_new->size = n1 + n2 - unused_size;
+	*thp = make_arityval(n1 + n2 - unused_size);
+
+	BIF_RET(make_map(mp_new));
+    }
+    BIF_ERROR(BIF_P, BADARG);
+}
 /* map:new/2
  */
 

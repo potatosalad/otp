@@ -587,6 +587,7 @@ bif map:get/2
 bif map:from_list/1
 bif map:is_key/2
 bif map:keys/1
+bif map:merge/2
 bif map:new/0
 bif map:put/3
 bif map:remove/2
