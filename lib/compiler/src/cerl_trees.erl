@@ -55,7 +55,15 @@
 	       update_c_let/4, update_c_letrec/3, update_c_module/5,
 	       update_c_primop/3, update_c_receive/4, update_c_seq/3,
 	       update_c_try/6, update_c_tuple/2, update_c_tuple_skel/2,
-	       update_c_values/2, values_es/1, var_name/1]).
+	       update_c_values/2, values_es/1, var_name/1,
+
+	       map_es/1, 
+	       update_c_map_skel/2,
+	       update_c_map_pair_assoc_skel/2, update_c_map_pair_exact_skel/2,
+	       ann_c_map_skel/2,
+	       ann_c_map_pair_assoc_skel/2, ann_c_map_pair_exact_skel/2,
+	       map_pair_assoc_es/1, map_pair_exact_es/1
+	   ]).
 
 
 %% ---------------------------------------------------------------------
@@ -129,6 +137,12 @@ map_1(F, T) ->
 			       map(F, cons_tl(T)));
  	tuple ->
 	    update_c_tuple_skel(T, map_list(F, tuple_es(T)));
+ 	map ->
+	    update_c_map_skel(T, map_list(F, map_es(T)));
+ 	map_pair_assoc ->
+	    update_c_map_pair_assoc_skel(T, map_list(F, map_pair_assoc_es(T)));
+ 	map_pair_exact ->
+	    update_c_map_pair_exact_skel(T, map_list(F, map_pair_exact_es(T)));
  	'let' ->
 	    update_c_let(T, map_list(F, let_vars(T)),
 			 map(F, let_arg(T)),
@@ -235,6 +249,12 @@ fold_1(F, S, T) ->
 	    fold(F, fold(F, S, cons_hd(T)), cons_tl(T));
 	tuple ->
 	    fold_list(F, S, tuple_es(T));
+	map ->
+	    fold_list(F, S, map_es(T));
+	map_pair_assoc ->
+	    fold_list(F, S, map_pair_assoc_es(T));
+	map_pair_exact ->
+	    fold_list(F, S, map_pair_exact_es(T));
  	'let' ->
 	    fold(F, fold(F, fold_list(F, S, let_vars(T)),
 			 let_arg(T)),
@@ -349,6 +369,9 @@ mapfold(F, S0, T) ->
  	tuple ->
 	    {Ts, S1} = mapfold_list(F, S0, tuple_es(T)),
 	    F(update_c_tuple_skel(T, Ts), S1);
+ 	map ->
+	    {Ts, S1} = mapfold_list(F, S0, map_es(T)),
+	    F(update_c_map_skel(T, Ts), S1);
  	'let' ->
 	    {Vs, S1} = mapfold_list(F, S0, let_vars(T)),
 	    {A, S2} = mapfold(F, S1, let_arg(T)),
@@ -688,6 +711,18 @@ label(T, N, Env) ->
 	    {Ts, N1} = label_list(tuple_es(T), N, Env),
 	    {As, N2} = label_ann(T, N1),
 	    {ann_c_tuple_skel(As, Ts), N2};
+ 	map ->
+	    {Ts, N1} = label_list(map_es(T), N, Env),
+	    {As, N2} = label_ann(T, N1),
+	    {ann_c_map_skel(As, Ts), N2};
+  	map_pair_assoc ->
+	    {Ts, N1} = label_list(map_pair_assoc_es(T), N, Env),
+	    {As, N2} = label_ann(T, N1),
+	    {ann_c_map_pair_assoc_skel(As, Ts), N2};
+   	map_pair_exact ->
+	    {Ts, N1} = label_list(map_pair_exact_es(T), N, Env),
+	    {As, N2} = label_ann(T, N1),
+	    {ann_c_map_pair_exact_skel(As, Ts), N2};
  	'let' ->
 	    {A, N1} = label(let_arg(T), N, Env),
 	    {Vs, N2, Env1} = label_vars(let_vars(T), N1, Env),

@@ -61,7 +61,10 @@
 	 t_pid/0, t_port/0, t_product/1, t_reference/0,
 	 t_sup/1, t_sup/2, t_subtract/2, t_to_string/2, t_to_tlist/1,
 	 t_tuple/0, t_tuple/1, t_tuple_args/1, t_tuple_subtypes/1,
-	 t_unit/0, t_unopaque/1]).
+	 t_unit/0, t_unopaque/1,
+
+	 t_map/1
+     ]).
 
 %%-define(DEBUG, true).
 %%-define(DEBUG_PP, true).
@@ -301,6 +304,12 @@ traverse(Tree, Map, State) ->
       handle_try(Tree, Map, State);
     tuple ->
       handle_tuple(Tree, Map, State);
+    map ->
+      handle_map(Tree, Map, State);
+    map_pair_assoc ->
+      handle_map_pair_assoc(Tree, Map, State);
+    map_pair_exact ->
+      handle_map_pair_exact(Tree, Map, State);
     values ->
       Elements = cerl:values_es(Tree),
       {State1, Map1, EsType} = traverse_list(Elements, Map, State),
@@ -668,7 +677,8 @@ is_opaque_type_test_problem(Fun, ArgTypes, State) ->
 			 FN =:= is_float;     FN =:= is_function;
 			 FN =:= is_integer;   FN =:= is_list;
 			 FN =:= is_number;    FN =:= is_pid; FN =:= is_port;
-			 FN =:= is_reference; FN =:= is_tuple ->
+			 FN =:= is_reference; FN =:= is_tuple;
+			 FN =:= is_map ->
       [Type] = ArgTypes,
       erl_types:t_is_opaque(Type) andalso
 	not lists:member(Type, State#state.opaques);
@@ -1020,6 +1030,23 @@ handle_try(Tree, Map, State) ->
   {State2, ExcMap2, HandlerType} = traverse(Handler, ExcMap1, SuccState),
   TryType = t_sup(SuccType, HandlerType),
   {State2, join_maps([ExcMap2, SuccMap], Map1), TryType}.
+
+%%----------------------------------------
+
+handle_map(Tree,Map,State) ->
+    Pairs = cerl:map_es(Tree),
+    {State1, Map1, TypePairs} = traverse_list(Pairs,Map,State),
+    {State1, Map1, t_map(TypePairs)}.
+
+handle_map_pair_assoc(Tree,Map,State) ->
+  Elements = cerl:map_pair_assoc_es(Tree),
+  {State1, Map1, [K,V]} = traverse_list(Elements,Map,State),
+  {State1, Map1, {K,V}}.
+
+handle_map_pair_exact(Tree,Map,State) ->
+  Elements = cerl:map_pair_exact_es(Tree),
+  {State1, Map1, [K,V]} = traverse_list(Elements,Map,State),
+  {State1, Map1, {K,V}}.
 
 %%----------------------------------------
 
@@ -1405,6 +1432,30 @@ bind_pat_vars([Pat|PatLeft], [Type|TypeLeft], Acc, Map, State, Rev) ->
 	    bind_opaque_pats(Literal, Type, Pat, Map, State, Rev);
 	  false -> {Map, LiteralOrOpaque}
 	end;
+      map ->
+	  {Map, t_map([])};
+%	Pairs = [ cerl:map_pair_es(Pair) || Pair <- cerl:map_es(Pat) ],
+%	MapType = t_inf(t_map([]), Type),
+%	case t_is_none(MapType) of
+%	    true ->
+%		bind_opaque_pats(MapType, Type, Pat, Map, State, Rev);
+%	    false ->
+%		MapJ = join_maps_begin(Map),
+%		Results = case Rev of
+%		    true ->
+%			[bind_pat_vars_reverse(Pair, [t_any(),t_any()], [], MapJ, State) || Pair <- Pairs];
+%		    false ->
+%			[bind_pat_vars(Pair, [t_any(),t_any()], [], MapJ, State) || Pair <- Pairs]
+%		end,
+%		case [M || {M, _} <- Results, M =/= error] of
+%		    [] -> bind_error([Pat], MapType, t_none(), bind);
+%		    Maps ->
+%			Map1 = join_maps_end(Maps, MapJ),
+%			_PairTypes = [{Ktype,Vtype} || {M, [Ktype,Vtype]} <- Results, M =/= error],
+%			% add t_sup
+%			{Map1, t_map([])}
+%		end
+%	end;
       tuple ->
 	Es = cerl:tuple_es(Pat),
 	{TypedRecord, Prototype} =

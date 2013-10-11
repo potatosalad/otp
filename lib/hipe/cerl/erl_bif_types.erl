@@ -117,7 +117,10 @@
 		    t_tuple/1,
 		    t_tuple_args/1,
 		    t_tuple_size/1,
-		    t_tuple_subtypes/1
+		    t_tuple_subtypes/1,
+
+		    t_is_map/1,
+		    t_map/0
 		   ]).
 
 -ifdef(DO_ERL_BIF_TYPES_TEST).
@@ -621,6 +624,9 @@ type(erlang, is_list, 1, Xs) ->
 	    check_guard(X, Fun2, t_maybe_improper_list())
 	end,
   strict(arg_types(erlang, is_list, 1), Xs, Fun);
+type(erlang, is_map, 1, Xs) ->
+  Fun = fun (X) -> check_guard(X, fun (Y) -> t_is_map(Y) end, t_map()) end,
+  strict(arg_types(erlang, is_map, 1), Xs, Fun);
 type(erlang, is_number, 1, Xs) ->
   Fun = fun (X) ->
 	    check_guard(X, fun (Y) -> t_is_number(Y) end, t_number())
@@ -736,6 +742,9 @@ type(erlang, is_tuple, 1, Xs) ->
 %% Guard bif, needs to be here.
 type(erlang, length, 1, Xs) ->
   strict(arg_types(erlang, length, 1), Xs, fun (_) -> t_non_neg_fixnum() end);
+%% Guard bif, needs to be here.
+type(erlang, map_size, 1, Xs) ->
+  strict(arg_types(erlang, map_size, 1), Xs, fun (_) -> t_non_neg_integer() end);
 type(erlang, make_tuple, 2, Xs) ->
   strict(arg_types(erlang, make_tuple, 2), Xs,
 	 fun ([Int, _]) ->
@@ -2213,6 +2222,8 @@ arg_types(erlang, is_integer, 1) ->
   [t_any()];
 arg_types(erlang, is_list, 1) ->
   [t_any()];
+arg_types(erlang, is_map, 1) ->
+  [t_any()];
 arg_types(erlang, is_number, 1) ->
   [t_any()];
 arg_types(erlang, is_pid, 1) ->
@@ -2230,6 +2241,9 @@ arg_types(erlang, is_tuple, 1) ->
 %% Guard bif, needs to be here.
 arg_types(erlang, length, 1) ->
   [t_list()];
+%% Guard bif, needs to be here.
+arg_types(erlang, map_size, 1) ->
+  [t_map()];
 arg_types(erlang, make_tuple, 2) ->
   [t_non_neg_fixnum(), t_any()];  % the value 0 is OK as first argument
 arg_types(erlang, make_tuple, 3) ->

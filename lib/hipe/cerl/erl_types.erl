@@ -210,7 +210,11 @@
 	 subst_all_vars_to_any/1,
 	 lift_list_to_pos_empty/1,
 	 is_erl_type/1,
-	 atom_to_string/1
+	 atom_to_string/1,
+
+	 t_is_map/1,
+	 t_map/1,
+	 t_map/0
 	]).
 
 %%-define(DO_ERL_TYPES_TEST, true).
@@ -260,6 +264,7 @@
 -define(function_tag,   function).
 -define(identifier_tag, identifier).
 -define(list_tag,       list).
+-define(map_tag,        map).
 -define(matchstate_tag, matchstate).
 -define(nil_tag,        nil).
 -define(number_tag,     number).
@@ -272,7 +277,7 @@
 -define(var_tag,        var).
 
 -type tag()  :: ?atom_tag | ?binary_tag | ?function_tag | ?identifier_tag
-              | ?list_tag | ?matchstate_tag | ?nil_tag | ?number_tag
+              | ?list_tag | ?map_tag | ?matchstate_tag | ?nil_tag | ?number_tag
               | ?opaque_tag | ?product_tag | ?remote_tag
               | ?tuple_tag | ?tuple_set_tag | ?union_tag | ?var_tag.
 
@@ -329,6 +334,7 @@
 -define(nonempty_list(Types, Term),?list(Types, Term, ?nonempty_qual)).
 -define(number(Set, Qualifier),    #c{tag=?number_tag, elements=Set, 
 				      qualifier=Qualifier}).
+-define(map(Pairs),                #c{tag=?map_tag, elements=Pairs}).
 -define(opaque(Optypes),           #c{tag=?opaque_tag, elements=Optypes}).
 -define(product(Types),            #c{tag=?product_tag, elements=Types}).
 -define(remote(RemTypes),          #c{tag=?remote_tag, elements=RemTypes}).
@@ -350,18 +356,19 @@
 %% Unions
 %%
 
--define(union(List), #c{tag=?union_tag, elements=[_,_,_,_,_,_,_,_,_,_]=List}).
+-define(union(List), #c{tag=?union_tag, elements=[_,_,_,_,_,_,_,_,_,_,_]=List}).
 
--define(atom_union(T),       ?union([T,?none,?none,?none,?none,?none,?none,?none,?none,?none])).
--define(bitstr_union(T),     ?union([?none,T,?none,?none,?none,?none,?none,?none,?none,?none])).
--define(function_union(T),   ?union([?none,?none,T,?none,?none,?none,?none,?none,?none,?none])).
--define(identifier_union(T), ?union([?none,?none,?none,T,?none,?none,?none,?none,?none,?none])).
--define(list_union(T),       ?union([?none,?none,?none,?none,T,?none,?none,?none,?none,?none])).
--define(number_union(T),     ?union([?none,?none,?none,?none,?none,T,?none,?none,?none,?none])).
--define(tuple_union(T),      ?union([?none,?none,?none,?none,?none,?none,T,?none,?none,?none])).
--define(matchstate_union(T), ?union([?none,?none,?none,?none,?none,?none,?none,T,?none,?none])).
--define(opaque_union(T),     ?union([?none,?none,?none,?none,?none,?none,?none,?none,T,?none])).
--define(remote_union(T),     ?union([?none,?none,?none,?none,?none,?none,?none,?none,?none,T])).
+-define(atom_union(T),       ?union([T,?none,?none,?none,?none,?none,?none,?none,?none,?none,?none])).
+-define(bitstr_union(T),     ?union([?none,T,?none,?none,?none,?none,?none,?none,?none,?none,?none])).
+-define(function_union(T),   ?union([?none,?none,T,?none,?none,?none,?none,?none,?none,?none,?none])).
+-define(identifier_union(T), ?union([?none,?none,?none,T,?none,?none,?none,?none,?none,?none,?none])).
+-define(list_union(T),       ?union([?none,?none,?none,?none,T,?none,?none,?none,?none,?none,?none])).
+-define(number_union(T),     ?union([?none,?none,?none,?none,?none,T,?none,?none,?none,?none,?none])).
+-define(tuple_union(T),      ?union([?none,?none,?none,?none,?none,?none,T,?none,?none,?none,?none])).
+-define(matchstate_union(T), ?union([?none,?none,?none,?none,?none,?none,?none,T,?none,?none,?none])).
+-define(opaque_union(T),     ?union([?none,?none,?none,?none,?none,?none,?none,?none,T,?none,?none])).
+-define(remote_union(T),     ?union([?none,?none,?none,?none,?none,?none,?none,?none,?none,T,?none])).
+-define(map_union(T),        ?union([?none,?none,?none,?none,?none,?none,?none,?none,?none,?none,T])).
 -define(integer_union(T),    ?number_union(T)).
 -define(float_union(T),      ?number_union(T)).
 -define(nil_union(T),        ?list_union(T)).
@@ -476,6 +483,9 @@ t_contains_opaque(?integer(_Types))         -> false;
 t_contains_opaque(?int_range(_From, _To))   -> false;
 t_contains_opaque(?int_set(_Set))           -> false;
 t_contains_opaque(?list(Type, _, _))        -> t_contains_opaque(Type);
+t_contains_opaque(?map(Pairs))              ->
+	list_contains_opaque([V||{_,V}<-Pairs]) orelse
+	list_contains_opaque([K||{K,_}<-Pairs]);
 t_contains_opaque(?matchstate(_P, _Slots))  -> false;
 t_contains_opaque(?nil)                     -> false;
 t_contains_opaque(?number(_Set, _Tag))      -> false;
@@ -574,7 +584,7 @@ t_opaque_match_atom(_, _) -> [].
 t_opaque_atom_vals(OpaqueStruct) ->
   case OpaqueStruct of
     ?atom(_) -> t_atom_vals(OpaqueStruct);
-    ?union([Atom,_,_,_,_,_,_,_,_,_]) -> t_atom_vals(Atom);
+    ?union([Atom,_,_,_,_,_,_,_,_,_,_]) -> t_atom_vals(Atom);
     _ -> unknown
   end.
 	  
@@ -593,7 +603,7 @@ t_opaque_tuple_tags(OpaqueStruct) ->
     ?tuple_set(_) = TupleSet ->
       Tuples = t_tuple_subtypes(TupleSet),
       lists:flatten([t_opaque_tuple_tags(T) || T <- Tuples]);
-    ?union([_,_,_,_,_,_,Tuples,_,_,_]) -> t_opaque_tuple_tags(Tuples);
+    ?union([_,_,_,_,_,_,Tuples,_,_,_,_]) -> t_opaque_tuple_tags(Tuples);
     _ -> []
   end.
 
@@ -1377,6 +1387,26 @@ lift_list_to_pos_empty(?list(Content, Termination, _)) ->
   ?list(Content, Termination, ?unknown_qual).
 
 %%-----------------------------------------------------------------------------
+%% Maps
+%%
+
+-spec t_map() -> erl_type().
+
+t_map() ->
+    ?map([]).
+
+-spec t_map([{erl_type(),erl_type()}]) -> erl_type().
+
+t_map(_) ->
+    ?map([]).
+
+-spec t_is_map(erl_type()) -> boolean().
+
+t_is_map(?map(_)) -> true;
+t_is_map(_) -> false.
+
+
+%%-----------------------------------------------------------------------------
 %% Tuples
 %%
 
@@ -2098,6 +2128,7 @@ force_union(T = ?nil) ->              ?list_union(T);
 force_union(T = ?number(_,_)) ->      ?number_union(T);
 force_union(T = ?opaque(_)) ->        ?opaque_union(T);
 force_union(T = ?remote(_)) ->        ?remote_union(T);
+force_union(T = ?map(_)) ->           ?map_union(T);
 force_union(T = ?tuple(_, _, _)) ->   ?tuple_union(T);
 force_union(T = ?tuple_set(_)) ->     ?tuple_union(T);
 force_union(T = ?matchstate(_, _)) -> ?matchstate_union(T);
@@ -3081,14 +3112,14 @@ t_unopaque(?tuple_set(Set), Opaques) ->
   NewSet = [{Sz, [t_unopaque(T, Opaques) || T <- Tuples]}
 	    || {Sz, Tuples} <- Set],
   ?tuple_set(NewSet);
-t_unopaque(?union([A,B,F,I,L,N,T,M,O,R]), Opaques) ->
+t_unopaque(?union([A,B,F,I,L,N,T,M,O,R,Map]), Opaques) ->
   UL = t_unopaque(L, Opaques),
   UT = t_unopaque(T, Opaques),
   UO = case O of
 	 ?none -> [];
 	 ?opaque(Os) -> [t_unopaque(S, Opaques) || #opaque{struct = S} <- Os]
        end,
-  t_sup([?union([A,B,F,I,UL,N,UT,M,?none,R])|UO]);
+  t_sup([?union([A,B,F,I,UL,N,UT,M,?none,R,Map])|UO]);
 t_unopaque(T, _) ->
   T.
 
@@ -3346,6 +3377,8 @@ t_to_string(?remote(Set), RecDict) ->
 	       || #remote{mod = Mod, name = Name, args = Args} <-
 		    set_to_list(Set)],
 	      " | ");
+t_to_string(?map(Pairs), RecDict) ->
+    "#{" ++ map_pairs_to_string(Pairs,RecDict) ++ "}";
 t_to_string(?tuple(?any, ?any, ?any), _RecDict) -> "tuple()";
 t_to_string(?tuple(Elements, _Arity, ?any), RecDict) ->   
   "{" ++ comma_sequence(Elements, RecDict) ++ "}";
@@ -3364,6 +3397,13 @@ t_to_string(?var(Id), _RecDict) when is_atom(Id) ->
   io_lib:format("~s", [atom_to_list(Id)]);
 t_to_string(?var(Id), _RecDict) when is_integer(Id) ->
   io_lib:format("var(~w)", [Id]).
+
+
+map_pairs_to_string([],_) -> [];
+map_pairs_to_string(Pairs,RecDict) ->
+    StrPairs = [{t_to_string(K,RecDict),t_to_string(V,RecDict)}||{K,V}<-Pairs],
+    string:join([K ++ "=>" ++ V||{K,V}<-StrPairs], ", ").
+
 
 record_to_string(Tag, [_|Fields], FieldNames, RecDict) ->
   FieldStrings = record_fields_to_string(Fields, FieldNames, RecDict, []),
@@ -3565,6 +3605,9 @@ t_from_form({type, _L, list, [Type]}, TypeNames, InOpaque, RecDict,
             VarDict) ->
   {T, R} = t_from_form(Type, TypeNames, InOpaque, RecDict, VarDict),
   {t_list(T), R};
+t_from_form({type, _L, map, _}, _TypeNames, _InOpaque, _RecDict,
+            _VarDict) ->
+  {t_map([]), []};
 t_from_form({type, _L, mfa, []}, _TypeNames, _InOpaque, _RecDict,
             _VarDict) ->
   {t_mfa(), []};
