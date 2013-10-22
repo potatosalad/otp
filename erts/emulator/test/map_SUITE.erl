@@ -33,6 +33,7 @@
 
 	%% Specific Map BIFs
 	t_bif_map_get/1,
+	t_bif_map_find/1,
 	t_bif_map_is_key/1,
 	t_bif_map_keys/1,
 	t_bif_map_new/1,
@@ -61,7 +62,7 @@ all() -> [
 	t_map_sort_literals,
 
 	%% Specific Map BIFs
-	t_bif_map_get,t_bif_map_is_key,
+	t_bif_map_get, t_bif_map_find, t_bif_map_is_key,
 	t_bif_map_keys,t_bif_map_new,t_bif_map_put,
 	t_bif_map_remove,t_bif_map_values,
 	t_bif_map_to_list, t_bif_map_from_list,
@@ -404,6 +405,7 @@ t_bif_map_get(Config) when is_list(Config) ->
     1    = map:get(a, #{ a=> 1}),
     2    = map:get(b, #{ a=> 1, b => 2}),
     "hi" = map:get("hello", #{ a=>1, "hello" => "hi"}),
+    "tuple hi" = map:get({1,1.0}, #{ a=>a, {1,1.0} => "tuple hi"}),
 
     M    = id(#{ k1=>"v1", <<"k2">> => <<"v3">> }),
     "v4" = map:get(<<"k2">>, M#{ <<"k2">> => "v4" }),
@@ -411,9 +413,34 @@ t_bif_map_get(Config) when is_list(Config) ->
     %% error case
     {'EXIT',{badarg,[{map,get,_,_}|_]}}  = (catch map:get(a,[])),
     {'EXIT',{badarg,[{map,get,_,_}|_]}}  = (catch map:get(a,<<>>)),
+    {'EXIT',{bad_key,[{map,get,_,_}|_]}} = (catch map:get({1,1}, #{{1,1.0} => "tuple"})),
     {'EXIT',{bad_key,[{map,get,_,_}|_]}} = (catch map:get(a,#{})),
     {'EXIT',{bad_key,[{map,get,_,_}|_]}} = (catch map:get(a,#{ b=>1, c=>2})),
     ok.
+
+t_bif_map_find(Config) when is_list(Config) ->
+
+    {ok, 1}     = map:find(a, #{ a=> 1}),
+    {ok, 2}     = map:find(b, #{ a=> 1, b => 2}),
+    {ok, "int"} = map:find(1, #{ 1   => "int"}),
+    {ok, "int"} = map:find(1.0, #{ 1 => "int"}),
+    {ok, "float"} = map:find(1, #{ 1.0  => "float"}),
+    {ok, "float"} = map:find(1.0, #{ 1.0=> "float"}),
+
+    {ok, "hi"} = map:find("hello", #{ a=>1, "hello" => "hi"}),
+    {ok, "tuple hi"} = map:find({1.0,1}, #{ a=>a, {1,1.0} => "tuple hi"}), % reverse types in tuple key
+
+    M = id(#{ k1=>"v1", <<"k2">> => <<"v3">> }),
+    {ok, "v4"} = map:find(<<"k2">>, M#{ <<"k2">> => "v4" }),
+
+    %% error case
+    error = map:find(a,#{}),
+    error = map:find(a,#{b=>1, c=>2}),
+
+    {'EXIT',{badarg,[{map,find,_,_}|_]}} = (catch map:find(a,[])),
+    {'EXIT',{badarg,[{map,find,_,_}|_]}} = (catch map:find(a,<<>>)),
+    ok.
+
 
 t_bif_map_is_key(Config) when is_list(Config) ->
     M1 = #{ "hi" => "hello", int => 3, <<"key">> => <<"value">>, 4 => number},
