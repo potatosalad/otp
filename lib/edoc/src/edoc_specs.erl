@@ -358,6 +358,8 @@ d2e({type,_,tuple,any}) ->
 d2e({type,_,binary,[Base,Unit]}) ->
     #t_binary{base_size = element(3, Base),
               unit_size = element(3, Unit)};
+d2e({type,_,map,_}) ->
+    #t_map{};
 d2e({type,_,tuple,Ts0}) ->
     Ts = d2e(Ts0),
     typevar_anno(#t_tuple{types = Ts}, Ts);
@@ -476,6 +478,8 @@ xrecs(#t_fun{args = Args0, range = Range0}=T, P) ->
     Args = xrecs(Args0, P),
     Range = xrecs(Range0, P),
     T#t_fun{args = Args, range = Range};
+xrecs(#t_map{}=T,_P) ->
+    T;
 xrecs(#t_tuple{types = Types0}=T, P) ->
     Types = xrecs(Types0, P),
     T#t_tuple{types = Types};
