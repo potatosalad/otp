@@ -406,7 +406,7 @@ print_length(Term, _D, _RF, _Enc, _Str) ->
 print_length_map(_Map, 1, _RF, _Enc, _Str) ->
     {"#{...}", 6};
 print_length_map(Map, D, RF, Enc, Str) when is_map(Map) ->
-    Pairs = print_length_map_pairs(map:to_list(Map), D, RF, Enc, Str),
+    Pairs = print_length_map_pairs(maps:to_list(Map), D, RF, Enc, Str),
     {{map, Pairs}, list_length(Pairs, 3)}.
 
 print_length_map_pairs([], _D, _RF, _Enc, _Str) ->
