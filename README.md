@@ -1,3 +1,30 @@
+Experimental Maps-branch
+------------------------
+
+This git-branch of Erlang/OTP contains R17-development with Maps, see [Maps EEP][6].
+
+Maps is currently an *experimental* feature under development, meaning,
+
+ * Do not use it in production, it is not stable,
+ * Do not base any git branch on this branch since it will most likely be rebased,
+ * We reserve the right to change any API or interfaces to Maps.
+
+The intention for Maps at this stage are for developers to get a feel for the Maps syntax.
+
+What should work,
+
+ * The maps API according to the EEP, i.e. the maps module and `erlang:is_map/1`, `erlang:map_size/1`.
+ * Maps syntax with *literal* keys, i.e. `#{ key => V1, "key" = V2, <<"key">> => V3 }` etc.
+ * Most of the runtime should be able to handle Maps, meaning External Format, Hashing, Most ETS, compares, etc.
+
+Applications known not to work or other issues at this time,
+
+ * Dialyzer, will not build PLTs with Maps (stdlib and erts) and the analyzer will most likely generate erroneous information,
+ * HiPE, the native compiler does not handle Maps,
+ * EDoc, does not handle Maps,
+ * MatchSpecs in tracing and ETS only handles the map guard BIFs.
+
+
 Erlang/OTP
 ==========
 
@@ -79,3 +106,4 @@ Copyright and License
    [3]: http://www.erlang.org/static/doc/mailinglist.html
    [4]: http://erlang.github.com/otp/
    [5]: HOWTO/INSTALL.md
+   [6]: http://github.com/erlang/eep/blob/master/eeps/eep-0043.md
