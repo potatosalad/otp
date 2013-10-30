@@ -194,7 +194,7 @@ foldr(Fun, Init, Map) when is_function(Fun,3), is_map(Map) ->
 map(Fun, Map) when is_function(Fun, 2), is_map(Map) ->
     maps:from_list(lists:map(fun
 		({K,V}) ->
-		    Fun(K,V)
+		    {K,Fun(K,V)}
 	    end,maps:to_list(Map))).
 
 -spec size(Map) -> non_neg_integer() when
