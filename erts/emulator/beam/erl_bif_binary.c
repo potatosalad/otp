@@ -534,7 +534,7 @@ static void ac_init_find_all(ACFindAllState *state, ACTrie *act, Sint startpos, 
 static void ac_clean_find_all(ACFindAllState *state)
 {
     if (state->out != NULL) {
-	erts_free(ERTS_ALC_T_TMP, state->out);
+	erts_free(ERTS_ALC_T_BINARY_FIND, state->out);
     }
 #ifdef HARDDEBUG
     state->out = NULL;
@@ -606,11 +606,11 @@ static int ac_find_all_non_overlapping(ACFindAllState *state, byte *haystack,
 		    if (m >= allocated) {
 			if (!allocated) {
 			    allocated = 10;
-			    out = erts_alloc(ERTS_ALC_T_TMP,
+			    out = erts_alloc(ERTS_ALC_T_BINARY_FIND,
 					     sizeof(FindallData) * allocated);
 			} else {
 			    allocated *= 2;
-			    out = erts_realloc(ERTS_ALC_T_TMP, out,
+			    out = erts_realloc(ERTS_ALC_T_BINARY_FIND, out,
 					       sizeof(FindallData) *
 					       allocated);
 			}
@@ -791,7 +791,7 @@ static void bm_init_find_all(BMFindAllState *state, Sint startpos, Uint len)
 static void bm_clean_find_all(BMFindAllState *state)
 {
     if (state->out != NULL) {
-	erts_free(ERTS_ALC_T_TMP, state->out);
+	erts_free(ERTS_ALC_T_BINARY_FIND, state->out);
     }
 #ifdef HARDDEBUG
     state->out = NULL;
@@ -833,10 +833,11 @@ static Sint bm_find_all_non_overlapping(BMFindAllState *state,
 	    if (m >= allocated) {
 		if (!allocated) {
 		    allocated = 10;
-		    out = erts_alloc(ERTS_ALC_T_TMP, sizeof(FindallData) * allocated);
+		    out = erts_alloc(ERTS_ALC_T_BINARY_FIND,
+				     sizeof(FindallData) * allocated);
 		} else {
 		    allocated *= 2;
-		    out = erts_realloc(ERTS_ALC_T_TMP, out,
+		    out = erts_realloc(ERTS_ALC_T_BINARY_FIND, out,
 				       sizeof(FindallData) * allocated);
 		}
 	    }
