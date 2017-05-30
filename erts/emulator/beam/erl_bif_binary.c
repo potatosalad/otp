@@ -1715,8 +1715,6 @@ static int do_match_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	res->head = 0;
 	res->end_pos = 0;
 	res->result = NIL;
-	res->hp = HAlloc(p, res->fad_sz * (3 + 2));
-	res->hendp = res->hp + (res->fad_sz * (3 + 2));
 	bfs->mode = BFReduce;
     }
 
@@ -1736,10 +1734,20 @@ static int do_match_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	res->head = res->tail;
     }
 
+    if (res->head < reds) {
+	res->hp = HAlloc(p, (res->head + 1) * (3 + 2));
+	res->hendp = res->hp + ((res->head + 1) * (3 + 2));
+    } else {
+	res->hp = HAlloc(p, reds * (3 + 2));
+	res->hendp = res->hp + (reds * (3 + 2));
+    }
+
     for (i = res->head; i >= 0; --i) {
 	if (--reds == 0) {
 	    res->head = i;
 	    bfs->ctx.reds = reds;
+	    HRelease(p, res->hendp, res->hp);
+	    res->hp = res->hendp = NULL;
 	    return DO_BIN_MATCH_RESTART;
 	}
 	tpl = TUPLE2(res->hp, fad[i].epos, fad[i].elen);
@@ -1881,8 +1889,6 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	orig_size = binary_size(subject);
 	res->end_pos = (Uint)(orig_size);
 	res->result = NIL;
-	res->hp = HAlloc(p, res->list_size * (ERL_SUB_BIN_SIZE + 2));
-	res->hendp = res->hp + (res->list_size * (ERL_SUB_BIN_SIZE + 2));
 	bfs->mode = BFReduce;
     }
 
@@ -1890,10 +1896,20 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
     ASSERT(bit_size == 0);
     fad = res->fad;
 
+    if (res->head < reds) {
+	res->hp = HAlloc(p, (res->head + 2) * (ERL_SUB_BIN_SIZE + 2));
+	res->hendp = res->hp + ((res->head + 2) * (ERL_SUB_BIN_SIZE + 2));
+    } else {
+	res->hp = HAlloc(p, reds * (ERL_SUB_BIN_SIZE + 2));
+	res->hendp = res->hp + (reds * (ERL_SUB_BIN_SIZE + 2));
+    }
+
     for (i = res->head; i >= 0; --i) {
 	if (--reds == 0) {
 	    res->head = i;
 	    bfs->ctx.reds = reds;
+	    HRelease(p, res->hendp, res->hp);
+	    res->hp = res->hendp = NULL;
 	    return DO_BIN_MATCH_RESTART;
 	}
 	sb = (ErlSubBin *)(res->hp);
