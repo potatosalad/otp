@@ -1020,6 +1020,7 @@ struct BinaryFindReduce {
 };
 
 struct BinaryFindRes {
+    ErtsHeapFactory factory;
     FindallData *fad;
     Uint  fad_sz;
     Uint  pos;
@@ -1028,8 +1029,6 @@ struct BinaryFindRes {
     Sint  tail;
     Uint  list_size;
     Uint  end_pos;
-    Eterm *hp;
-    Eterm *hendp;
     Eterm result;
 };
 
@@ -1715,6 +1714,7 @@ static int do_match_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	res->head = 0;
 	res->end_pos = 0;
 	res->result = NIL;
+	erts_factory_proc_prealloc_init(&(res->factory), p, res->fad_sz * (3 + 2));
 	bfs->mode = BFReduce;
     }
 
@@ -1734,29 +1734,18 @@ static int do_match_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	res->head = res->tail;
     }
 
-    if (res->head < reds) {
-	res->hp = HAlloc(p, (res->head + 1) * (3 + 2));
-	res->hendp = res->hp + ((res->head + 1) * (3 + 2));
-    } else {
-	res->hp = HAlloc(p, reds * (3 + 2));
-	res->hendp = res->hp + (reds * (3 + 2));
-    }
-
     for (i = res->head; i >= 0; --i) {
 	if (--reds == 0) {
 	    res->head = i;
 	    bfs->ctx.reds = reds;
-	    HRelease(p, res->hendp, res->hp);
-	    res->hp = res->hendp = NULL;
 	    return DO_BIN_MATCH_RESTART;
 	}
-	tpl = TUPLE2(res->hp, fad[i].epos, fad[i].elen);
-	res->hp += 3;
-	res->result = CONS(res->hp, tpl, res->result);
-	res->hp += 2;
+	tpl = TUPLE2(res->factory.hp, fad[i].epos, fad[i].elen);
+	res->factory.hp += 3;
+	res->result = CONS(res->factory.hp, tpl, res->result);
+	res->factory.hp += 2;
     }
-    HRelease(p, res->hendp, res->hp);
-    res->hp = res->hendp = NULL;
+    erts_factory_close(&(res->factory));
     *res_term = res->result;
 
     return DO_BIN_MATCH_OK;
@@ -1889,6 +1878,7 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	orig_size = binary_size(subject);
 	res->end_pos = (Uint)(orig_size);
 	res->result = NIL;
+	erts_factory_proc_prealloc_init(&(res->factory), p, res->list_size * (ERL_SUB_BIN_SIZE + 2));
 	bfs->mode = BFReduce;
     }
 
@@ -1896,23 +1886,13 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
     ASSERT(bit_size == 0);
     fad = res->fad;
 
-    if (res->head < reds) {
-	res->hp = HAlloc(p, (res->head + 2) * (ERL_SUB_BIN_SIZE + 2));
-	res->hendp = res->hp + ((res->head + 2) * (ERL_SUB_BIN_SIZE + 2));
-    } else {
-	res->hp = HAlloc(p, reds * (ERL_SUB_BIN_SIZE + 2));
-	res->hendp = res->hp + (reds * (ERL_SUB_BIN_SIZE + 2));
-    }
-
     for (i = res->head; i >= 0; --i) {
 	if (--reds == 0) {
 	    res->head = i;
 	    bfs->ctx.reds = reds;
-	    HRelease(p, res->hendp, res->hp);
-	    res->hp = res->hendp = NULL;
 	    return DO_BIN_MATCH_RESTART;
 	}
-	sb = (ErlSubBin *)(res->hp);
+	sb = (ErlSubBin *)(res->factory.hp);
 	sb->size = res->end_pos - (fad[i].pos + fad[i].len);
 	if (!(sb->size == 0 && do_trim)) {
 	    sb->thing_word = HEADER_SUB_BIN;
@@ -1921,9 +1901,9 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	    sb->bitoffs = bit_offset;
 	    sb->bitsize = 0;
 	    sb->is_writable = 0;
-	    res->hp += ERL_SUB_BIN_SIZE;
-	    res->result = CONS(res->hp, make_binary(sb), res->result);
-	    res->hp += 2;
+	    res->factory.hp += ERL_SUB_BIN_SIZE;
+	    res->result = CONS(res->factory.hp, make_binary(sb), res->result);
+	    res->factory.hp += 2;
 	    do_trim &= ~BINARY_SPLIT_TRIM;
 	}
 	res->end_pos = fad[i].pos;
@@ -1932,7 +1912,7 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
     res->head = i;
     bfs->ctx.reds = reds;
 
-    sb = (ErlSubBin *)(res->hp);
+    sb = (ErlSubBin *)(res->factory.hp);
     sb->size = fad[0].pos;
     if (!(sb->size == 0 && do_trim)) {
 	sb->thing_word = HEADER_SUB_BIN;
@@ -1941,12 +1921,11 @@ static int do_split_global_result(Process *p, Eterm subject, BinaryFindState *bf
 	sb->bitoffs = bit_offset;
 	sb->bitsize = 0;
 	sb->is_writable = 0;
-	res->hp += ERL_SUB_BIN_SIZE;
-	res->result = CONS(res->hp, make_binary(sb), res->result);
-	res->hp += 2;
+	res->factory.hp += ERL_SUB_BIN_SIZE;
+	res->result = CONS(res->factory.hp, make_binary(sb), res->result);
+	res->factory.hp += 2;
     }
-    HRelease(p, res->hendp, res->hp);
-    res->hp = res->hendp = NULL;
+    erts_factory_close(&(res->factory));
     *res_term = res->result;
 
     return DO_BIN_MATCH_OK;
