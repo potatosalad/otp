@@ -156,6 +156,10 @@ static char *erts_dop_to_string(enum dop dop) {
         return "SPAWN_REQUEST_TT";
     if (dop == DOP_SPAWN_REPLY)
         return "SPAWN_REPLY";
+    if (dop == DOP_ALIAS_SEND)
+	return "ALIAS_SEND";
+    if (dop == DOP_ALIAS_SEND_TT)
+	return "ALIAS_SEND_TT";
     if (dop == DOP_UNLINK_ID)
         return "UNLINK_ID";
     if (dop == DOP_UNLINK_ID_ACK)
@@ -1911,6 +1915,8 @@ int erts_net_message(Port *prt,
     Sint type;
     Eterm token;
     Uint tuple_arity;
+    DistFilter *fp;
+    DistFilterData fdata;
     int res;
 #ifdef ERTS_DIST_MSG_DBG
     ErlDrvSizeT orig_len = len;
@@ -2098,7 +2104,15 @@ int erts_net_message(Port *prt,
             /* old incarnation of node; reply noproc... */
         }
         else if (is_internal_pid(to)) {
-            ErtsLinkData *ldp = erts_link_external_create(ERTS_LNK_TYPE_DIST_PROC,
+	    ErtsLinkData *ldp;
+	    if ((dep->opts & ERTS_DIST_CTRL_OPT_DROP_LINK)) {
+#ifdef ERTS_DIST_MSG_DBG
+		erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			     erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+		goto dist_link_noproc_error;
+	    }
+            ldp = erts_link_external_create(ERTS_LNK_TYPE_DIST_PROC,
                                                           to, from);
             ASSERT(ldp->dist.other.item == to);
             ASSERT(eq(ldp->proc.other.item, from));
@@ -2120,11 +2134,12 @@ int erts_net_message(Port *prt,
             erts_link_release_both(ldp);
         }
 
+	dist_link_noproc_error:
         code = erts_dsig_prepare(&ctx, dep, NULL, 0, ERTS_DSP_NO_LOCK, 1, 1, 0);
         if (code == ERTS_DSIG_PREP_CONNECTED && ctx.connection_id == conn_id) {
             code = erts_dsig_send_exit(&ctx, to, from, am_noproc);
             ASSERT(code == ERTS_DSIG_SEND_OK);
-        }
+	}
 
 	break;
     }
@@ -2235,7 +2250,14 @@ int erts_net_message(Port *prt,
             goto invalid_message;
 
         if (is_internal_pid(pid)) {
-            ErtsMonitorData *mdp;
+	    ErtsMonitorData *mdp;
+	    if ((dep->opts & ERTS_DIST_CTRL_OPT_DROP_MONITOR)) {
+#ifdef ERTS_DIST_MSG_DBG
+		erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			     erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+		goto dist_monitor_noproc_error;
+	    }
             mdp = erts_monitor_create(ERTS_MON_TYPE_DIST_PROC,
                                       ref, watcher, pid, name,
                                       THE_NON_VALUE);
@@ -2259,6 +2281,7 @@ int erts_net_message(Port *prt,
 
         }
 
+	dist_monitor_noproc_error:
         code = erts_dsig_prepare(&ctx, dep, NULL, 0, ERTS_DSP_NO_LOCK, 1, 1, 0);
         if (code == ERTS_DSIG_PREP_CONNECTED && ctx.connection_id == conn_id) {
             code = erts_dsig_send_m_exit(&ctx, watcher, watched, ref, am_noproc);
@@ -2343,6 +2366,17 @@ int erts_net_message(Port *prt,
 	if (is_not_pid(from) || is_not_atom(to)){
 	    goto invalid_message;
 	}
+	fp = NULL;
+	fdata.t = ERTS_DEF_TYPE_REG_SEND;
+	fdata.u.reg_send.name = to;
+	fp = erts_find_dist_filter(dep, fdata);
+	if ((fp && fp->action == 0) || (!fp && (dep->opts & ERTS_DIST_CTRL_OPT_DROP_REG_SEND))) {
+#ifdef ERTS_DIST_MSG_DBG
+	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+	    break;
+	}
 	rp = erts_whereis_process(NULL, 0, to, 0, 0);
 	if (rp) {
 	    ErtsProcLocks locks = 0;
@@ -2398,6 +2432,13 @@ int erts_net_message(Port *prt,
         to = tuple[3];
         if (is_not_pid(to))
             goto invalid_message;
+	if ((dep->opts & ERTS_DIST_CTRL_OPT_DROP_SEND)) {
+#ifdef ERTS_DIST_MSG_DBG
+	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+	    break;
+	}
         rp = erts_proc_lookup(to);
 
         if (rp) {
@@ -2431,6 +2472,13 @@ int erts_net_message(Port *prt,
         if (is_not_ref(to)) {
             goto invalid_message;
         }
+	if ((dep->opts & ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND)) {
+#ifdef ERTS_DIST_MSG_DBG
+	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+	    break;
+	}
         erts_proc_sig_send_dist_to_alias(from, to, edep, ede_hfrag, token);
         break;
         
@@ -2626,12 +2674,19 @@ int erts_net_message(Port *prt,
 	if (is_not_pid(from) || is_not_pid(to)) {
 	    goto invalid_message;
 	}
+	if ((dep->opts & ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER)) {
+#ifdef ERTS_DIST_MSG_DBG
+	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+	    break;
+	}
 
         (void) erts_proc_sig_send_group_leader(NULL, to, from, NIL);
 	break;
 
     case DOP_SPAWN_REQUEST_TT: {
-        Eterm tmp_heap[2];
+        Eterm tmp_heap[6];
         ErlSpawnOpts so;
         int code, opts_error;
         Eterm pid, error, ref, from, gl, mfa, opts, token, args;
@@ -2674,7 +2729,22 @@ int erts_net_message(Port *prt,
                 goto invalid_message;
             if (is_not_small(tp[3]))
                 goto invalid_message;
+	    fp = NULL;
+	    fdata.t = ERTS_DEF_TYPE_SPAWN_REQUEST;
+	    fdata.u.spawn_request.mod = tp[1];
+	    fdata.u.spawn_request.fun = tp[2];
+	    fdata.u.spawn_request.arity = unsigned_val(tp[3]);
+	    fp = erts_find_dist_filter(dep, fdata);
         }
+
+	if ((fp && fp->action == 0) || (!fp && (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST))) {
+#ifdef ERTS_DIST_MSG_DBG
+	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
+			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
+#endif
+	    error = am_badfun;
+	    goto dist_spawn_error;
+	}
 
         opts_error = erts_parse_spawn_opts(&so, opts, NULL, 0);
         if (opts_error) {
@@ -2741,7 +2811,8 @@ int erts_net_message(Port *prt,
         so.token = token;
         so.opts = opts;
 
-        args = CONS(&tmp_heap[0], mfa, NIL);
+	args = TUPLE3(&tmp_heap[0], dep->spawn_request_handler, dep->sysname, mfa);
+	args = CONS(&tmp_heap[4], args, NIL);
         pid = erl_create_process(NULL,
                                  am_erts_internal,
                                  am_dist_spawn_init,
@@ -4099,7 +4170,99 @@ dist_ctrl_set_opt_3(BIF_ALIST_3)
 
     if (dep->connection_id != conn_id)
         ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
-    else {
+    else if (is_tuple_arity(BIF_ARG_2, 2)) {
+	Eterm *tpl;
+	tpl = tuple_val(BIF_ARG_2);
+	switch (tpl[1]) {
+	case am_filter:
+	    switch (tpl[2]) {
+	    case am_link:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_LINK
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_LINK;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_LINK;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_reg_send:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_REG_SEND
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_REG_SEND;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_REG_SEND;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_group_leader:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_monitor:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_MONITOR
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_MONITOR;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_MONITOR;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_send:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SEND
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_SEND;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_SEND;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_spawn_request:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    case am_alias_send:
+	    	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND
+					? am_reject
+					: am_accept));
+		if (BIF_ARG_3 == am_reject) 
+		    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND;
+		else if (BIF_ARG_3 == am_accept)
+		    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND;
+		else
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    default:
+	    	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    }
+	    break;
+	default:
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+            break;
+	}
+    } else {
 
         switch (BIF_ARG_2) {
         case am_get_size:
@@ -4113,6 +4276,13 @@ dist_ctrl_set_opt_3(BIF_ALIST_3)
             else
                 ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
             break;
+	case am_spawn_request:
+	    ERTS_BIF_PREP_RET(ret, dep->spawn_request_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->spawn_request_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
         default:
             ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
             break;
@@ -4142,7 +4312,57 @@ dist_ctrl_get_opt_2(BIF_ALIST_2)
 
     if (dep->connection_id != conn_id)
         ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
-    else {
+    else if (is_tuple_arity(BIF_ARG_2, 2)) {
+	Eterm *tpl;
+	tpl = tuple_val(BIF_ARG_2);
+	switch (tpl[1]) {
+	case am_filter:
+	    switch (tpl[2]) {
+	    case am_link:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_LINK
+					? am_reject
+					: am_accept));
+		break;
+	    case am_reg_send:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_REG_SEND
+					? am_reject
+					: am_accept));
+		break;
+	    case am_group_leader:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER
+					? am_reject
+					: am_accept));
+		break;
+	    case am_monitor:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_MONITOR
+					? am_reject
+					: am_accept));
+		break;
+	    case am_send:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SEND
+					? am_reject
+					: am_accept));
+		break;
+	    case am_spawn_request:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST
+					? am_reject
+					: am_accept));
+		break;
+	    case am_alias_send:
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND
+					? am_reject
+					: am_accept));
+		break;
+	    default:
+	    	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		break;
+	    }
+	    break;
+	default:
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+            break;
+	}
+    } else {
 
         switch (BIF_ARG_2) {
         case am_get_size:
@@ -4150,6 +4370,9 @@ dist_ctrl_get_opt_2(BIF_ALIST_2)
                                     ? am_true
                                     : am_false));
             break;
+	case am_spawn_request:
+	    ERTS_BIF_PREP_RET(ret, dep->spawn_request_handler);
+	    break;
         default:
             ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
             break;
@@ -4420,6 +4643,392 @@ dist_ctrl_get_data_1(BIF_ALIST_1)
     free_dist_obuf(obuf, 0);
 
     BIF_RET2(res, (initial_reds - reds));
+}
+
+BIF_RETTYPE
+dist_add_filter_4(BIF_ALIST_4)
+{
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+    DistFilter *fp;
+    DistFilterData fdata;
+    BIF_RETTYPE ret;
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    if (!(BIF_ARG_4 == am_accept || BIF_ARG_4 == am_reject))
+	BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rwlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_rwunlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    switch (BIF_ARG_2) {
+    case am_reg_send:
+	if (is_atom(BIF_ARG_3)) {
+	    fdata.t = ERTS_DEF_TYPE_REG_SEND;
+	    fdata.u.reg_send.name = BIF_ARG_3;
+	    fp = erts_find_or_insert_dist_filter(dep, fdata);
+	    if (fp) {
+		fp->action = (BIF_ARG_4 == am_accept) ? 1 : 0;
+		ERTS_BIF_PREP_RET(ret, am_true);
+	    } else {
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    }
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    case am_spawn_request:
+	if (is_tuple_arity(BIF_ARG_3, 3)) {
+	    Eterm *tpl;
+	    tpl = tuple_val(BIF_ARG_3);
+	    if (is_atom(tpl[1]) && is_atom(tpl[2]) && is_small(tpl[3])) {
+		fdata.t = ERTS_DEF_TYPE_SPAWN_REQUEST;
+		fdata.u.spawn_request.mod = tpl[1];
+		fdata.u.spawn_request.fun = tpl[2];
+		fdata.u.spawn_request.arity = unsigned_val(tpl[3]);
+		fp = erts_find_or_insert_dist_filter(dep, fdata);
+		if (fp) {
+		    fp->action = (BIF_ARG_4 == am_accept) ? 1 : 0;
+		    ERTS_BIF_PREP_RET(ret, am_true);
+		} else {
+		    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+		}
+	    } else {
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    }
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    default:
+	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    }
+
+    erts_de_rwunlock(dep);
+
+    return ret;
+}
+
+BIF_RETTYPE
+dist_del_filter_3(BIF_ALIST_3)
+{
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+    DistFilterData fdata;
+    BIF_RETTYPE ret;
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rwlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_rwunlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    switch (BIF_ARG_2) {
+    case am_reg_send:
+        if (is_atom(BIF_ARG_3)) {
+	    fdata.t = ERTS_DEF_TYPE_REG_SEND;
+	    fdata.u.reg_send.name = BIF_ARG_3;
+	    if (erts_delete_dist_filter(dep, fdata))
+		ERTS_BIF_PREP_RET(ret, am_true);
+	    else
+		ERTS_BIF_PREP_RET(ret, am_false);
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    case am_spawn_request:
+	if (is_tuple_arity(BIF_ARG_3, 3)) {
+	    Eterm *tpl;
+	    tpl = tuple_val(BIF_ARG_3);
+	    if (is_atom(tpl[1]) && is_atom(tpl[2]) && is_small(tpl[3])) {
+		fdata.t = ERTS_DEF_TYPE_SPAWN_REQUEST;
+		fdata.u.spawn_request.mod = tpl[1];
+		fdata.u.spawn_request.fun = tpl[2];
+		fdata.u.spawn_request.arity = unsigned_val(tpl[3]);
+		if (erts_delete_dist_filter(dep, fdata))
+		    ERTS_BIF_PREP_RET(ret, am_true);
+		else
+		    ERTS_BIF_PREP_RET(ret, am_false);
+	    } else {
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    }
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    default:
+	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    }
+
+    erts_de_rwunlock(dep);
+
+    return ret;
+}
+
+BIF_RETTYPE
+dist_set_filter_3(BIF_ALIST_3)
+{
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+    BIF_RETTYPE ret;
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    if (!(BIF_ARG_3 == am_accept || BIF_ARG_3 == am_reject))
+	BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rwlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_rwunlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    switch (BIF_ARG_2) {
+    case am_link:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_LINK
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_LINK;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_LINK;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_reg_send:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_REG_SEND
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_REG_SEND;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_REG_SEND;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_group_leader:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_monitor:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_MONITOR
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_MONITOR;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_MONITOR;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_send:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SEND
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_SEND;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_SEND;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_spawn_request:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_alias_send:
+	ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND
+				? am_reject
+				: am_accept));
+	if (BIF_ARG_3 == am_reject) 
+	    dep->opts |= ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND;
+	else if (BIF_ARG_3 == am_accept)
+	    dep->opts &= ~ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    default:
+	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    }
+
+    erts_de_rwunlock(dep);
+
+    return ret;
+}
+
+BIF_RETTYPE
+dist_set_handler_3(BIF_ALIST_3)
+{
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+    BIF_RETTYPE ret;
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    if (!is_atom(BIF_ARG_3))
+	BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rwlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_rwunlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    switch (BIF_ARG_2) {
+    case am_spawn_request:
+	ERTS_BIF_PREP_RET(ret, dep->spawn_request_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->spawn_request_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    default:
+	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    }
+
+    erts_de_rwunlock(dep);
+
+    return ret;
+}
+
+BIF_RETTYPE
+dist_test_filter_3(BIF_ALIST_3)
+{
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+    DistFilter *fp;
+    DistFilterData fdata;
+    BIF_RETTYPE ret;
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_runlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    switch (BIF_ARG_2) {
+    case am_link:
+	if (is_pid(BIF_ARG_3))
+	    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_LINK
+				    ? am_reject
+				    : am_accept));
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_reg_send:
+	if (is_atom(BIF_ARG_3)) {
+	    fdata.t = ERTS_DEF_TYPE_REG_SEND;
+	    fdata.u.reg_send.name = BIF_ARG_3;
+	    fp = erts_find_dist_filter(dep, fdata);
+	    if (fp)
+		ERTS_BIF_PREP_RET(ret, ((fp->action == 1) ? am_accept : am_reject));
+	    else
+		ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_REG_SEND
+					? am_reject
+					: am_accept));
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    case am_group_leader:
+	if (is_pid(BIF_ARG_3))
+	    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER
+				    ? am_reject
+				    : am_accept));
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_monitor:
+	if (is_pid(BIF_ARG_3))
+	    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_MONITOR
+				    ? am_reject
+				    : am_accept));
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_send:
+	if (is_pid(BIF_ARG_3))
+	    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SEND
+				    ? am_reject
+				    : am_accept));
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_spawn_request:
+	if (is_tuple_arity(BIF_ARG_3, 3)) {
+	    Eterm *tpl;
+	    tpl = tuple_val(BIF_ARG_3);
+	    if (is_atom(tpl[1]) && is_atom(tpl[2]) && is_small(tpl[3])) {
+		fdata.t = ERTS_DEF_TYPE_SPAWN_REQUEST;
+		fdata.u.spawn_request.mod = tpl[1];
+		fdata.u.spawn_request.fun = tpl[2];
+		fdata.u.spawn_request.arity = unsigned_val(tpl[3]);
+		fp = erts_find_dist_filter(dep, fdata);
+		if (fp)
+		    ERTS_BIF_PREP_RET(ret, ((fp->action == 1) ? am_accept : am_reject));
+		else
+		    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST
+					    ? am_reject
+					    : am_accept));
+	    } else {
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    }
+	} else {
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	}
+	break;
+    case am_alias_send:
+	if (is_ref(BIF_ARG_3))
+	    ERTS_BIF_PREP_RET(ret, (dep->opts & ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND
+				    ? am_reject
+				    : am_accept));
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    default:
+	ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    }
+
+    erts_de_runlock(dep);
+
+    return ret;
 }
 
 void

@@ -59,6 +59,11 @@
 	 monitor_nodes/2,
 	 setopts/2,
 	 getopts/2,
+	 add_filter/4,
+	 del_filter/3,
+	 set_filter/3,
+	 set_handler/3,
+	 test_filter/3,
 	 start/2,
 	 start/1,
 	 stop/0]).
@@ -847,7 +852,6 @@ handle_call({getopts, Node, Opts}, From, State) ->
     end,
     async_reply({reply, Return, State}, From);
 
-
 handle_call(get_state, From, State) ->
     Started = case State#state.supervisor of
                   net_sup -> static;
@@ -869,6 +873,76 @@ handle_call(get_state, From, State) ->
                name_type => NameType,
                name => Name,
                domain_type => DomainType},
+    async_reply({reply, Return, State}, From);
+
+handle_call({add_filter, Node, Type, Value, Action}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {add_filter, Type, Value, Action}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
+    async_reply({reply, Return, State}, From);
+
+handle_call({del_filter, Node, Type, Value}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {del_filter, Type, Value}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
+    async_reply({reply, Return, State}, From);
+
+handle_call({set_filter, Node, Type, Action}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {set_filter, Type, Action}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
+    async_reply({reply, Return, State}, From);
+
+handle_call({set_handler, Node, Type, Handler}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {set_handler, Type, Handler}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
+    async_reply({reply, Return, State}, From);
+
+handle_call({test_filter, Node, Type, Value}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {test_filter, Type, Value}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
     async_reply({reply, Return, State}, From);
 
 handle_call(_Msg, _From, State) ->
@@ -2338,3 +2412,18 @@ merge_opts([H|T], B0) ->
 
 getopts(Node, Opts) when is_atom(Node), is_list(Opts) ->
     request({getopts, Node, Opts}).
+
+add_filter(Node, Type, Value, Action) ->
+    request({add_filter, Node, Type, Value, Action}).
+
+del_filter(Node, Type, Value) ->
+    request({del_filter, Node, Type, Value}).
+
+set_filter(Node, Type, Action) ->
+    request({set_filter, Node, Type, Action}).
+
+set_handler(Node, Type, Handler) ->
+    request({set_handler, Node, Type, Handler}).
+
+test_filter(Node, Type, Value) ->
+    request({test_filter, Node, Type, Value}).

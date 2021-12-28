@@ -77,8 +77,8 @@
 	  request_type = normal,
 
 	  %% New in kernel-5.1 (OTP 19.1):
-	  mf_setopts,        %% netkernel:setopts on active connection
-	  mf_getopts,         %% netkernel:getopts on active connection
+	  mf_setopts,        %% net_kernel:setopts on active connection
+	  mf_getopts,        %% net_kernel:getopts on active connection
 
           %% New in kernel-6.0 (OTP 21.0)
           f_handshake_complete, %% Notify handshake complete
@@ -88,7 +88,14 @@
 
           %% New in kernel-@master@ (OTP-23.0)
           this_creation,
-          other_creation
+          other_creation,
+
+	  %% New in kernel-@master@ (OTP-25.0)
+	  mf_add_filter,     %% net_kernel:add_filter/4 on active connection
+	  mf_del_filter,     %% net_kernel:del_filter/3 on active connection
+	  mf_set_filter,     %% net_kernel:set_filter/3 on active connection
+	  mf_set_handler,    %% net_kernel:set_handler/3 on active connection
+	  mf_test_filter     %% net_kernel:test_filter/3 on active connection
 }).
 	  
 
