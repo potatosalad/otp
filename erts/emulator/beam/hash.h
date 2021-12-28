@@ -100,6 +100,7 @@ void  hash_foreach(Hash*, HFOREACH_FUN, void *);
 
 ERTS_GLB_INLINE Uint hash_get_slot(Hash *h, HashValue hv);
 ERTS_GLB_INLINE void* hash_fetch(Hash *, void*, H_FUN, HCMP_FUN);
+ERTS_GLB_INLINE HashValue hash_combine(HashValue h, HashValue k);
 
 #if ERTS_GLB_INLINE_INCL_FUNC_DEF
 
@@ -142,6 +143,51 @@ ERTS_GLB_INLINE void* hash_fetch(Hash *h, void* tmpl, H_FUN hash, HCMP_FUN cmp)
 	b = b->next;
     }
     return (void*) 0;
+}
+
+// This is a copy of boost's 32-bit and 64-bit hash_combine
+// See: https://www.boost.org/doc/libs/1_78_0/boost/container_hash/hash.hpp
+ERTS_GLB_INLINE HashValue
+hash_combine(HashValue h, HashValue k)
+{
+#ifdef ARCH_64
+    const HashValue m = (UWORD_CONSTANT(0xc6a4a793) << 32) + UWORD_CONSTANT(0x5bd1e995);
+    const Sint r = 47;
+
+    k *= m;
+    k ^= k >> r;
+    k *= m;
+
+    h ^= k;
+    h *= m;
+
+    // Completely arbitrary number, to prevent 0's
+    // from hashing to 0.
+    h += UWORD_CONSTANT(0xe6546b64);
+
+    return h;
+#else
+    const HashValue c1 = UWORD_CONSTANT(0xcc9e2d51);
+    const HashValue c2 = UWORD_CONSTANT(0x1b873593);
+
+#if defined(_MSC_VER)
+#   define HASH_ROTL32(x, r) _rotl(x, r)
+#else
+#   define HASH_ROTL32(x, r) (x << r) | (x >> (32 - r))
+#endif
+
+    k *= c1;
+    k = HASH_ROTL32(k, 15);
+    k *= c2;
+
+    h ^= k;
+    h = HASH_ROTL32(h, 13);
+    h = h * 5 + UWORD_CONSTANT(0xe6546b64);
+
+#undef HASH_ROTL32
+
+    return h;
+#endif
 }
 
 #endif /* ERTS_GLB_INLINE_INCL_FUNC_DEF */

@@ -506,7 +506,12 @@ connection(#hs_data{other_node = Node,
 			      HSData#hs_data.mf_tick,
 			      HSData#hs_data.mf_getstat,
 			      HSData#hs_data.mf_setopts,
-			      HSData#hs_data.mf_getopts},
+			      HSData#hs_data.mf_getopts,
+			      HSData#hs_data.mf_add_filter,
+			      HSData#hs_data.mf_del_filter,
+			      HSData#hs_data.mf_set_filter,
+			      HSData#hs_data.mf_set_handler,
+			      HSData#hs_data.mf_test_filter},
 			     #tick{});
 		_ ->
 		    ?shutdown2(Node, connection_setup_failed)
@@ -603,8 +608,59 @@ getstat(DHandle, _Socket, undefined) ->
 getstat(_DHandle, Socket, MFGetstat) ->
     MFGetstat(Socket).
 
+add_filter(DHandle, _Socket, undefined, OpType, Value, Action) ->
+    try
+	erlang:dist_add_filter(DHandle, OpType, Value, Action)
+    catch
+	error:badarg:_ ->
+	    {error, {badarg, [{add_filter, OpType, Value, Action}]}}
+    end;
+add_filter(_DHandle, Socket, MFAddFilter, OpType, Value, Action) ->
+    MFAddFilter(Socket, OpType, Value, Action).
+
+del_filter(DHandle, _Socket, undefined, OpType, Value) ->
+    try
+	erlang:dist_del_filter(DHandle, OpType, Value)
+    catch
+	error:badarg:_ ->
+	    {error, {badarg, [{del_filter, OpType, Value}]}}
+    end;
+del_filter(_DHandle, Socket, MFDelFilter, OpType, Value) ->
+    MFDelFilter(Socket, OpType, Value).
+
+set_filter(DHandle, _Socket, undefined, OpType, Action) ->
+    try
+	erlang:dist_set_filter(DHandle, OpType, Action)
+    catch
+	error:badarg:_ ->
+	    {error, {badarg, [{set_filter, OpType, Action}]}}
+    end;
+set_filter(_DHandle, Socket, MFSetFilter, OpType, Action) ->
+    MFSetFilter(Socket, OpType, Action).
+
+set_handler(DHandle, _Socket, undefined, OpType, Handler) ->
+    try
+	erlang:dist_set_handler(DHandle, OpType, Handler)
+    catch
+	error:badarg:_ ->
+	    {error, {badarg, [{set_handler, OpType, Handler}]}}
+    end;
+set_handler(_DHandle, Socket, MFSetHandler, OpType, Handler) ->
+    MFSetHandler(Socket, OpType, Handler).
+
+test_filter(DHandle, _Socket, undefined, OpType, Value) ->
+    try
+	erlang:dist_test_filter(DHandle, OpType, Value)
+    catch
+	error:badarg:_ ->
+	    {error, {badarg, [{test_filter, OpType, Value}]}}
+    end;
+test_filter(_DHandle, Socket, MFTestFilter, OpType, Value) ->
+    MFTestFilter(Socket, OpType, Value).
+
 con_loop({Kernel, Node, Socket, Type, DHandle, MFTick, MFGetstat,
-          MFSetOpts, MFGetOpts}=ConData,
+          MFSetOpts, MFGetOpts, MFAddFilter, MFDelFilter,
+	  MFSetFilter, MFSetHandler, MFTestFilter}=ConData,
 	 Tick) ->
     receive
 	{tcp_closed, Socket} ->
@@ -652,6 +708,26 @@ con_loop({Kernel, Node, Socket, Type, DHandle, MFTick, MFGetstat,
 		      undefined -> {error, enotsup};
 		      _ -> MFGetOpts(Socket, Opts)
 		  end,
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {add_filter, OpType, Value, Action}} ->
+	    Ret = add_filter(DHandle, Socket, MFAddFilter, OpType, Value, Action),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {del_filter, OpType, Value}} ->
+	    Ret = del_filter(DHandle, Socket, MFDelFilter, OpType, Value),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {set_filter, OpType, Action}} ->
+	    Ret = set_filter(DHandle, Socket, MFSetFilter, OpType, Action),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {set_handler, OpType, Handler}} ->
+	    Ret = set_handler(DHandle, Socket, MFSetHandler, OpType, Handler),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {test_filter, OpType, Value}} ->
+	    Ret = test_filter(DHandle, Socket, MFTestFilter, OpType, Value),
 	    From ! {Ref, Ret},
 	    con_loop(ConData, Tick)
     end.

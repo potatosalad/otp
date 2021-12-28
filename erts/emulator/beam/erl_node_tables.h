@@ -120,6 +120,31 @@ typedef struct {
 
 struct ErtsProcList_;
 
+enum dist_filter_type {
+    ERTS_DEF_TYPE_REG_SEND,
+    ERTS_DEF_TYPE_SPAWN_REQUEST,
+};
+
+typedef struct dist_filter_data_ {
+    enum dist_filter_type t;
+    union {
+	struct {
+	    Eterm name;
+	} reg_send;
+	struct {
+	    Eterm mod;
+	    Eterm fun;
+	    Uint arity;
+	} spawn_request;
+    } u;
+} DistFilterData;
+
+typedef struct dist_filter_ {
+    HashBucket hack_bucket;
+    Uint action;
+    DistFilterData data;
+} DistFilter;
+
 /*
  * Lock order:
  *   1. dist_entry->rwmtx
@@ -148,6 +173,8 @@ struct dist_entry_ {
     Uint64 dflags;		/* Distribution flags, like hidden,
 				   atom cache etc. */
     Uint32 opts;
+    Eterm spawn_request_handler;
+    Hash filters;
 
     ErtsMonLnkDist *mld;        /* Monitors and links */
 
@@ -274,6 +301,10 @@ DistEntry *erts_dhandle_to_dist_entry(Eterm dhandle, Uint32* connection_id);
 #define ERTS_DHANDLE_SIZE (3+ERTS_MAGIC_REF_THING_SIZE)
 Eterm erts_build_dhandle(Eterm **hpp, ErlOffHeap*, DistEntry*, Uint32 conn_id);
 Eterm erts_make_dhandle(Process *c_p, DistEntry*, Uint32 conn_id);
+
+DistFilter *erts_find_or_insert_dist_filter(DistEntry *dep, DistFilterData data);
+DistFilter *erts_find_dist_filter(DistEntry *dep, DistFilterData data);
+int erts_delete_dist_filter(DistEntry *dep, DistFilterData data);
 
 ERTS_GLB_INLINE void erts_init_node_entry(ErlNode *np, erts_aint_t val);
 #ifdef ERL_NODE_BOOKKEEP
