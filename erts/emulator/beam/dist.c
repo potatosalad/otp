@@ -2350,24 +2350,56 @@ int erts_net_message(Port *prt,
 #endif
 	    break;
 	}
-	rp = erts_whereis_process(NULL, 0, to, 0, 0);
-	if (rp) {
-	    ErtsProcLocks locks = 0;
+	if (type == DOP_REG_SEND) {
+	    token = NIL;
+	} else {
+	    token = tuple[5];
+	}
+	if (dep->reg_send_handler != am_undefined) {
+	    Eterm tmp_heap[10];
+	    ErlSpawnOpts so;
+	    Eterm args, mfa, pid;
 
-	    if (type == DOP_REG_SEND) {
-		token = NIL;
-	    } else {
-		token = tuple[5];
+	    ERTS_SET_DEFAULT_SPAWN_OPTS(&so);
+
+	    mfa = TUPLE3(&tmp_heap[0], dep->reg_send_handler, am_reg_send, make_small(3));
+
+//	    so.mref = ref;
+	    so.tag = am_reg_send;
+	    so.parent_id = from;
+	    so.group_leader = ERTS_INVALID_PID;
+	    so.mfa = mfa;
+	    so.dist_entry = dep;
+	    so.conn_id = conn_id;
+	    so.mld = ede.mld;
+	    so.edep = edep;
+	    so.ede_hfrag = ede_hfrag;
+	    so.token = token;
+//	    so.opts = opts;
+
+	    args = CONS(&tmp_heap[4], to, NIL);
+	    args = CONS(&tmp_heap[6], from, args);
+	    args = CONS(&tmp_heap[8], dep->sysname, args);
+	    pid = erl_create_process(NULL,
+				     dep->reg_send_handler,
+				     am_reg_send,
+				     args,
+				     &so);
+	    (void)pid;
+	} else {
+	    rp = erts_whereis_process(NULL, 0, to, 0, 0);
+	    if (rp) {
+		ErtsProcLocks locks = 0;
+
+		erts_queue_dist_message(rp, locks, edep, ede_hfrag, token, from);
+
+		if (locks)
+		    erts_proc_unlock(rp, locks);
+	    } else if (ede_hfrag != NULL) {
+		erts_free_dist_ext_copy(erts_get_dist_ext(ede_hfrag));
+		free_message_buffer(ede_hfrag);
 	    }
-
-            erts_queue_dist_message(rp, locks, edep, ede_hfrag, token, from);
-
-	    if (locks)
-		erts_proc_unlock(rp, locks);
-	} else if (ede_hfrag != NULL) {
-            erts_free_dist_ext_copy(erts_get_dist_ext(ede_hfrag));
-            free_message_buffer(ede_hfrag);
-        }
+	}
 	break;
 
     case DOP_SEND_SENDER_TT: {
@@ -2411,14 +2443,49 @@ int erts_net_message(Port *prt,
 #endif
 	    break;
 	}
-	rp = erts_proc_lookup(to);
+	if (dep->send_handler != am_undefined) {
+	    Eterm tmp_heap[10];
+	    ErlSpawnOpts so;
+	    Eterm args, from, mfa, pid;
 
-	if (rp) {
-	    erts_queue_dist_message(rp, 0, edep, ede_hfrag, token, am_Empty);
-        } else if (ede_hfrag != NULL) {
-            erts_free_dist_ext_copy(erts_get_dist_ext(ede_hfrag));
-            free_message_buffer(ede_hfrag);
-        }
+	    from = (type == DOP_SEND_SENDER || type == DOP_SEND_SENDER_TT) ? tuple[2] : am_Empty;
+
+	    ERTS_SET_DEFAULT_SPAWN_OPTS(&so);
+
+	    mfa = TUPLE3(&tmp_heap[0], dep->send_handler, am_send, make_small(3));
+
+//	    so.mref = ref;
+	    so.tag = am_send;
+	    so.parent_id = from;
+	    so.group_leader = ERTS_INVALID_PID;
+	    so.mfa = mfa;
+	    so.dist_entry = dep;
+	    so.conn_id = conn_id;
+	    so.mld = ede.mld;
+	    so.edep = edep;
+	    so.ede_hfrag = ede_hfrag;
+	    so.token = token;
+//	    so.opts = opts;
+
+	    args = CONS(&tmp_heap[4], to, NIL);
+	    args = CONS(&tmp_heap[6], from, args);
+	    args = CONS(&tmp_heap[8], dep->sysname, args);
+	    pid = erl_create_process(NULL,
+				     dep->send_handler,
+				     am_send,
+				     args,
+				     &so);
+	    (void)pid;
+	} else {
+	    rp = erts_proc_lookup(to);
+
+	    if (rp) {
+		erts_queue_dist_message(rp, 0, edep, ede_hfrag, token, am_Empty);
+	    } else if (ede_hfrag != NULL) {
+		erts_free_dist_ext_copy(erts_get_dist_ext(ede_hfrag));
+		free_message_buffer(ede_hfrag);
+	    }
+	}
 	
 	break;
     }
@@ -2452,7 +2519,42 @@ int erts_net_message(Port *prt,
 	    break;
 	}
 
-        erts_proc_sig_send_dist_to_alias(to, edep, ede_hfrag, token);
+	if (dep->alias_send_handler != am_undefined) {
+	    Eterm tmp_heap[10];
+	    ErlSpawnOpts so;
+	    Eterm args, from, mfa, pid;
+
+	    from = tuple[2];
+
+	    ERTS_SET_DEFAULT_SPAWN_OPTS(&so);
+
+	    mfa = TUPLE3(&tmp_heap[0], dep->alias_send_handler, am_alias_send, make_small(3));
+
+//	    so.mref = ref;
+	    so.tag = am_send;
+	    so.parent_id = from;
+	    so.group_leader = ERTS_INVALID_PID;
+	    so.mfa = mfa;
+	    so.dist_entry = dep;
+	    so.conn_id = conn_id;
+	    so.mld = ede.mld;
+	    so.edep = edep;
+	    so.ede_hfrag = ede_hfrag;
+	    so.token = token;
+//	    so.opts = opts;
+
+	    args = CONS(&tmp_heap[4], to, NIL);
+	    args = CONS(&tmp_heap[6], from, args);
+	    args = CONS(&tmp_heap[8], dep->sysname, args);
+	    pid = erl_create_process(NULL,
+				     dep->alias_send_handler,
+				     am_alias_send,
+				     args,
+				     &so);
+	    (void)pid;
+	} else {
+            erts_proc_sig_send_dist_to_alias(to, edep, ede_hfrag, token);
+	}
         break;
         
     case DOP_PAYLOAD_MONITOR_P_EXIT:
@@ -2654,8 +2756,40 @@ int erts_net_message(Port *prt,
 #endif
 	    break;
 	}
+	if (dep->group_leader_handler != am_undefined) {
+	    Eterm tmp_heap[10];
+	    ErlSpawnOpts so;
+	    Eterm args, mfa, pid;
 
-        (void) erts_proc_sig_send_group_leader(NULL, to, from, NIL);
+	    ERTS_SET_DEFAULT_SPAWN_OPTS(&so);
+
+	    mfa = TUPLE3(&tmp_heap[0], dep->group_leader_handler, am_group_leader, make_small(3));
+
+//	    so.mref = ref;
+	    so.tag = am_send;
+	    so.parent_id = am_Empty;
+	    so.group_leader = ERTS_INVALID_PID;
+	    so.mfa = mfa;
+	    so.dist_entry = dep;
+	    so.conn_id = conn_id;
+	    so.mld = ede.mld;
+	    so.edep = edep;
+	    so.ede_hfrag = ede_hfrag;
+	    so.token = NIL;
+//	    so.opts = opts;
+
+	    args = CONS(&tmp_heap[4], to, NIL);
+	    args = CONS(&tmp_heap[6], from, args);
+	    args = CONS(&tmp_heap[8], dep->sysname, args);
+	    pid = erl_create_process(NULL,
+				     dep->group_leader_handler,
+				     am_group_leader,
+				     args,
+				     &so);
+	    (void)pid;
+	} else {
+            (void) erts_proc_sig_send_group_leader(NULL, to, from, NIL);
+	}
 	break;
 
     case DOP_SPAWN_REQUEST_TT: {
@@ -4251,10 +4385,52 @@ dist_ctrl_set_opt_3(BIF_ALIST_3)
             else
                 ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
             break;
+	case am_link:
+	    ERTS_BIF_PREP_RET(ret, dep->link_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->link_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
+	case am_reg_send:
+	    ERTS_BIF_PREP_RET(ret, dep->reg_send_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->reg_send_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
+	case am_group_leader:
+	    ERTS_BIF_PREP_RET(ret, dep->group_leader_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->group_leader_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
+	case am_monitor:
+	    ERTS_BIF_PREP_RET(ret, dep->monitor_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->monitor_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
+	case am_send:
+	    ERTS_BIF_PREP_RET(ret, dep->send_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->send_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
 	case am_spawn_request:
 	    ERTS_BIF_PREP_RET(ret, dep->spawn_request_handler);
 	    if (is_atom(BIF_ARG_3))
 	    	dep->spawn_request_handler = BIF_ARG_3;
+	    else
+		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	    break;
+	case am_alias_send:
+	    ERTS_BIF_PREP_RET(ret, dep->alias_send_handler);
+	    if (is_atom(BIF_ARG_3))
+	    	dep->alias_send_handler = BIF_ARG_3;
 	    else
 		ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
 	    break;
@@ -4881,10 +5057,52 @@ dist_set_handler_3(BIF_ALIST_3)
     }
 
     switch (BIF_ARG_2) {
+    case am_link:
+	ERTS_BIF_PREP_RET(ret, dep->link_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->link_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_reg_send:
+	ERTS_BIF_PREP_RET(ret, dep->reg_send_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->reg_send_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_group_leader:
+	ERTS_BIF_PREP_RET(ret, dep->group_leader_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->group_leader_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_monitor:
+	ERTS_BIF_PREP_RET(ret, dep->monitor_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->monitor_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_send:
+	ERTS_BIF_PREP_RET(ret, dep->send_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->send_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
     case am_spawn_request:
 	ERTS_BIF_PREP_RET(ret, dep->spawn_request_handler);
 	if (is_atom(BIF_ARG_3))
 	    dep->spawn_request_handler = BIF_ARG_3;
+	else
+	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
+	break;
+    case am_alias_send:
+	ERTS_BIF_PREP_RET(ret, dep->alias_send_handler);
+	if (is_atom(BIF_ARG_3))
+	    dep->alias_send_handler = BIF_ARG_3;
 	else
 	    ERTS_BIF_PREP_ERROR(ret, BIF_P, BADARG);
 	break;
