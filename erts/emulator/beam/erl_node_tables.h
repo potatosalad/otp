@@ -173,7 +173,13 @@ struct dist_entry_ {
     Uint64 dflags;		/* Distribution flags, like hidden,
 				   atom cache etc. */
     Uint32 opts;
+    Eterm link_handler;
+    Eterm reg_send_handler;
+    Eterm group_leader_handler;
+    Eterm monitor_handler;
+    Eterm send_handler;
     Eterm spawn_request_handler;
+    Eterm alias_send_handler;
     Hash filters;
 
     ErtsMonLnkDist *mld;        /* Monitors and links */

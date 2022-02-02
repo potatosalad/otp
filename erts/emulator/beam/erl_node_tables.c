@@ -294,7 +294,13 @@ dist_table_alloc(void *dep_tmpl)
     dep->suspended_nodeup               = NULL;
     dep->dflags				= 0;
     dep->opts                           = 0;
-    dep->spawn_request_handler           = am_undefined;
+    dep->link_handler			= am_undefined;
+    dep->reg_send_handler		= am_undefined;
+    dep->group_leader_handler		= am_undefined;
+    dep->monitor_handler		= am_undefined;
+    dep->send_handler			= am_undefined;
+    dep->spawn_request_handler		= am_undefined;
+    dep->alias_send_handler		= am_undefined;
 
     hf.hash       = (H_FUN)		dist_filter_hash;
     hf.cmp        = (HCMP_FUN)		dist_filter_cmp;
@@ -789,7 +795,13 @@ erts_set_dist_entry_not_connected(DistEntry *dep)
     dep->state = ERTS_DE_STATE_IDLE;
     dep->dflags = 0;
     dep->opts = 0;
+    dep->link_handler = am_undefined;
+    dep->reg_send_handler = am_undefined;
+    dep->group_leader_handler = am_undefined;
+    dep->monitor_handler = am_undefined;
+    dep->send_handler = am_undefined;
     dep->spawn_request_handler = am_undefined;
+    dep->alias_send_handler = am_undefined;
     dep->prev = NULL;
     dep->cid = NIL;
 
