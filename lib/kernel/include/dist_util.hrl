@@ -93,6 +93,7 @@
 	  %% New in kernel-@master@ (OTP-25.0)
 	  mf_add_filter,     %% net_kernel:add_filter/4 on active connection
 	  mf_del_filter,     %% net_kernel:del_filter/3 on active connection
+	  mf_dist_info,      %% net_kernel:dist_info/1 on active connection
 	  mf_set_filter,     %% net_kernel:set_filter/3 on active connection
 	  mf_set_handler,    %% net_kernel:set_handler/3 on active connection
 	  mf_test_filter     %% net_kernel:test_filter/3 on active connection

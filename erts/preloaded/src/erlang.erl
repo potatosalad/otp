@@ -55,8 +55,9 @@
          dist_get_stat/1,
          dist_add_filter/4,
          dist_del_filter/3,
+         dist_info/1,
          dist_set_filter/3,
-	 dist_set_handler/3,
+         dist_set_handler/3,
          dist_test_filter/3]).
 
 -deprecated([{now,0,
@@ -3784,6 +3785,9 @@ dist_add_filter(_DHandle, _Type, _Value, _Action) ->
     erlang:nif_error(undefined).
 
 dist_del_filter(_DHandle, _Type, _Value) ->
+    erlang:nif_error(undefined).
+
+dist_info(_DHandle) ->
     erlang:nif_error(undefined).
 
 dist_set_filter(_DHandle, _Type, _Action) ->

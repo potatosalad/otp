@@ -783,6 +783,7 @@ bif maps:from_keys/2
 
 bif erlang:dist_add_filter/4
 bif erlang:dist_del_filter/3
+bif erlang:dist_info/1
 bif erlang:dist_set_filter/3
 bif erlang:dist_set_handler/3
 bif erlang:dist_test_filter/3

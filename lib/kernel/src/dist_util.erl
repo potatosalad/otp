@@ -492,6 +492,7 @@ flags_to_version(Flags) ->
                 f_getopts       :: function() | 'undefined',
                 f_add_filter    :: function() | 'undefined',
                 f_del_filter    :: function() | 'undefined',
+		f_dist_info     :: function() | 'undefined',
                 f_set_filter    :: function() | 'undefined',
                 f_set_handler   :: function() | 'undefined',
                 f_test_filter   :: function() | 'undefined'}).
@@ -526,6 +527,7 @@ connection(#hs_data{other_node = Node,
                                     f_getopts = HSData#hs_data.mf_getopts,
                                     f_add_filter = HSData#hs_data.mf_add_filter,
                                     f_del_filter = HSData#hs_data.mf_del_filter,
+                                    f_dist_info = HSData#hs_data.mf_dist_info,
                                     f_set_filter = HSData#hs_data.mf_set_filter,
                                     f_set_handler = HSData#hs_data.mf_set_handler,
                                     f_test_filter = HSData#hs_data.mf_test_filter},
@@ -685,6 +687,10 @@ con_loop(#state{kernel = Kernel, node = Node,
 	    Ret = del_filter(DHandle, Socket, ConData#state.f_del_filter, OpType, Value),
 	    From ! {Ref, Ret},
 	    con_loop(ConData, Tick);
+	{From, Ref, {dist_info}} ->
+	    Ret = dist_info(DHandle, Socket, ConData#state.f_dist_info),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
 	{From, Ref, {set_filter, OpType, Action}} ->
 	    Ret = set_filter(DHandle, Socket, ConData#state.f_set_filter, OpType, Action),
 	    From ! {Ref, Ret},
@@ -718,6 +724,16 @@ del_filter(DHandle, _Socket, undefined, OpType, Value) ->
     end;
 del_filter(_DHandle, Socket, MFDelFilter, OpType, Value) ->
     MFDelFilter(Socket, OpType, Value).
+
+dist_info(DHandle, _Socket, undefined) ->
+    try
+	erlang:dist_info(DHandle)
+    catch
+	erlang:badarg:_ ->
+	    {error, {badarg, [dist_info]}}
+    end;
+dist_info(_DHandle, Socket, MFDistInfo) ->
+    MFDistInfo(Socket).
 
 set_filter(DHandle, _Socket, undefined, OpType, Action) ->
     try

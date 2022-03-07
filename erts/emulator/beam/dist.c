@@ -2110,8 +2110,12 @@ int erts_net_message(Port *prt,
 		erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			     erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+		erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.link);
+		erts_atomic64_inc_nob(&dep->filter_stat_reject.link);
 		goto dist_link_noproc_error;
 	    }
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.link);
+	    erts_atomic64_inc_nob(&dep->filter_stat_accept.link);
             ldp = erts_link_external_create(ERTS_LNK_TYPE_DIST_PROC,
                                                           to, from);
             ASSERT(ldp->dist.other.item == to);
@@ -2179,6 +2183,8 @@ int erts_net_message(Port *prt,
         if (is_not_internal_pid(to))
             goto invalid_message;
 
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.unlink);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.unlink);
         erts_proc_sig_send_dist_unlink(dep, conn_id, from, to, id);
 	break;
     }
@@ -2205,6 +2211,8 @@ int erts_net_message(Port *prt,
         if (is_not_internal_pid(to))
             goto invalid_message;
 
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.unlink_ack);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.unlink_ack);
         erts_proc_sig_send_dist_unlink_ack(dep, conn_id, from, to, id);
 	break;
     }
@@ -2256,8 +2264,12 @@ int erts_net_message(Port *prt,
 		erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			     erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+		erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.monitor);
+		erts_atomic64_inc_nob(&dep->filter_stat_reject.monitor);
 		goto dist_monitor_noproc_error;
 	    }
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.monitor);
+	    erts_atomic64_inc_nob(&dep->filter_stat_accept.monitor);
             mdp = erts_monitor_create(ERTS_MON_TYPE_DIST_PROC,
                                       ref, watcher, pid, name,
                                       THE_NON_VALUE);
@@ -2320,6 +2332,8 @@ int erts_net_message(Port *prt,
         else if (is_atom(watched)) {
             ErtsMonitor *mon;
 
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.demonitor);
+	    erts_atomic64_inc_nob(&dep->filter_stat_accept.demonitor);
             erts_mtx_lock(&ede.mld->mtx);
             if (ede.mld->alive) {
                 mon = erts_monitor_tree_lookup(ede.mld->orig_name_monitors, ref);
@@ -2375,8 +2389,12 @@ int erts_net_message(Port *prt,
 	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.reg_send);
+	    erts_atomic64_inc_nob(&dep->filter_stat_reject.reg_send);
 	    break;
 	}
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.reg_send);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.reg_send);
 	if (type == DOP_REG_SEND) {
 	    token = NIL;
 	} else {
@@ -2469,9 +2487,12 @@ int erts_net_message(Port *prt,
 	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.send);
+	    erts_atomic64_inc_nob(&dep->filter_stat_reject.send);
 	    break;
 	}
-
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.send);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.send);
 	if (dep->send_handler != am_undefined) {
 	    Eterm tmp_heap[10];
 	    ErlSpawnOpts so;
@@ -2545,9 +2566,12 @@ int erts_net_message(Port *prt,
 	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.alias_send);
+	    erts_atomic64_inc_nob(&dep->filter_stat_reject.alias_send);
 	    break;
 	}
-
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.alias_send);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.alias_send);
 	if (dep->alias_send_handler != am_undefined) {
 	    Eterm tmp_heap[10];
 	    ErlSpawnOpts so;
@@ -2637,6 +2661,9 @@ int erts_net_message(Port *prt,
         }
 #endif
 
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.monitor_exit);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.monitor_exit);
+
         erts_proc_sig_send_dist_monitor_down(
             dep, ref, watched, watcher, edep, ede_hfrag, reason);
 	break;
@@ -2698,6 +2725,8 @@ int erts_net_message(Port *prt,
         }
 #endif
 
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.exit);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.exit);
         erts_proc_sig_send_dist_link_exit(dep,
                                           from, to, edep, ede_hfrag,
                                           reason, token);
@@ -2766,6 +2795,8 @@ int erts_net_message(Port *prt,
         }
 #endif
 
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.exit2);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.exit2);
         erts_proc_sig_send_dist_exit(dep, from, to, edep, ede_hfrag, reason, token);
 	break;
     }
@@ -2783,8 +2814,12 @@ int erts_net_message(Port *prt,
 	    erts_fprintf(dbg_file, "DROP: CTL: %s: %.80T\n",
 			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.group_leader);
+	    erts_atomic64_inc_nob(&dep->filter_stat_reject.group_leader);
 	    break;
 	}
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.group_leader);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.group_leader);
 	if (dep->group_leader_handler != am_undefined) {
 	    Eterm tmp_heap[10];
 	    ErlSpawnOpts so;
@@ -2879,9 +2914,12 @@ int erts_net_message(Port *prt,
 			 erts_dop_to_string(unsigned_val(tuple[1])), arg);
 #endif
 	    error = am_badfun;
+	    erts_atomic64_inc_nob(&erts_dist_filter_stat_reject.spawn_request);
+	    erts_atomic64_inc_nob(&dep->filter_stat_reject.spawn_request);
 	    goto dist_spawn_error;
 	}
-
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.spawn_request);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.spawn_request);
         opts_error = erts_parse_spawn_opts(&so, opts, NULL, 0);
         if (opts_error) {
             ErtsDSigSendContext ctx;
@@ -3041,6 +3079,9 @@ int erts_net_message(Port *prt,
                 lnk = &ldp->proc;
             }
         }
+
+	erts_atomic64_inc_nob(&erts_dist_filter_stat_accept.spawn_reply);
+	erts_atomic64_inc_nob(&dep->filter_stat_accept.spawn_reply);
 
         if (!erts_proc_sig_send_dist_spawn_reply(dep->sysname, ref,
                                                  parent, lnk, result,
@@ -3248,6 +3289,63 @@ retry:
 
  fail:
     erts_de_runlock(dep);
+    return res;
+}
+
+static Eterm
+dist_info_stat_to_atom(Uint **hpp, Uint *szp, int i)
+{
+    switch (i) {
+    case 0:
+	return erts_bld_atom(hpp, szp, "link");
+    case 1:
+	return erts_bld_atom(hpp, szp, "reg_send");
+    case 2:
+	return erts_bld_atom(hpp, szp, "group_leader");
+    case 3:
+	return erts_bld_atom(hpp, szp, "monitor");
+    case 4:
+	return erts_bld_atom(hpp, szp, "demonitor");
+    case 5:
+	return erts_bld_atom(hpp, szp, "send");
+    case 6:
+	return erts_bld_atom(hpp, szp, "exit");
+    case 7:
+	return erts_bld_atom(hpp, szp, "exit2");
+    case 8:
+	return erts_bld_atom(hpp, szp, "monitor_exit");
+    case 9:
+	return erts_bld_atom(hpp, szp, "spawn_request");
+    case 10:
+	return erts_bld_atom(hpp, szp, "spawn_reply");
+    case 11:
+	return erts_bld_atom(hpp, szp, "unlink");
+    case 12:
+	return erts_bld_atom(hpp, szp, "unlink_ack");
+    case 13:
+	return erts_bld_atom(hpp, szp, "alias_send");
+    default:
+	return am_undefined;
+    }
+}
+
+Eterm
+erts_dist_filter_stats(Uint **hpp, Uint *szp, const DistFilterStat *accept, const DistFilterStat *reject)
+{
+    int num_stats = sizeof(DistFilterStat) / sizeof(erts_atomic64_t);
+    Uint64 stats[num_stats * 2];
+    Eterm terms[num_stats];
+    Eterm res = THE_NON_VALUE;
+    int i;
+
+    for (i = 0; i < num_stats; i++) {
+	if (hpp) {
+	    stats[(i * 2) + 0] = (Uint64) erts_atomic64_read_nob(((void *)accept) + (sizeof(erts_atomic64_t) * i));
+	    stats[(i * 2) + 1] = (Uint64) erts_atomic64_read_nob(((void *)reject) + (sizeof(erts_atomic64_t) * i));
+	}
+	terms[i] = erts_bld_tuple(hpp, szp, 3, dist_info_stat_to_atom(hpp, szp, i), erts_bld_uint64(hpp, szp, stats[(i * 2) + 0]), erts_bld_uint64(hpp, szp, stats[(i * 2) + 1]));
+    }
+    res = erts_bld_list(hpp, szp, num_stats, terms);
     return res;
 }
 
@@ -4953,6 +5051,93 @@ dist_del_filter_3(BIF_ALIST_3)
     erts_de_rwunlock(dep);
 
     return ret;
+}
+
+BIF_RETTYPE
+dist_info_1(BIF_ALIST_1)
+{
+    Eterm res;
+    Eterm *hp;
+    Eterm **hpp;
+    Uint sz;
+    Uint *szp;
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_runlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    sz = 0;
+    szp = &sz;
+    hpp = NULL;
+    while (1) {
+	res = erts_dist_filter_stats(hpp, szp, &dep->filter_stat_accept, &dep->filter_stat_reject);
+	if (hpp) {
+	    erts_de_runlock(dep);
+	    BIF_RET(res);
+	}
+	hp = HAlloc(BIF_P, sz);
+	szp = NULL;
+	hpp = &hp;
+    }
+}
+
+BIF_RETTYPE
+dist_info_2(BIF_ALIST_2)
+{
+    int num_stats = sizeof(DistFilterStat) / sizeof(erts_atomic64_t);
+    Uint64 *stats;
+    Eterm *terms;
+    Eterm res;
+    Eterm *hp;
+    Eterm **hpp;
+    Uint sz;
+    Uint *szp;
+    Uint32 conn_id;
+    DistEntry *dep = erts_dhandle_to_dist_entry(BIF_ARG_1, &conn_id);
+
+    if (!dep)
+        BIF_ERROR(BIF_P, BADARG);
+
+    erts_de_rlock(dep);
+
+    if (dep->connection_id != conn_id) {
+        erts_de_runlock(dep);
+        BIF_ERROR(BIF_P, BADARG);
+    }
+
+    stats = erts_alloc(ERTS_ALC_T_TMP, (sizeof(Uint64) * num_stats * 2) + (sizeof(Eterm) * num_stats));
+    terms = ((void *)stats) + (sizeof(Uint64) * num_stats * 2);
+
+    sz = 0;
+    szp = &sz;
+    hpp = NULL;
+    while (1) {
+	int i;
+	for (i = 0; i < num_stats; i++) {
+	    if (!hpp) {
+		stats[(i * 2) + 0] = (Uint64) erts_atomic64_read_nob(((void *)&dep->filter_stat_accept) + (sizeof(erts_atomic64_t) * i));
+		stats[(i * 2) + 1] = (Uint64) erts_atomic64_read_nob(((void *)&dep->filter_stat_reject) + (sizeof(erts_atomic64_t) * i));
+	    }
+	    terms[i] = erts_bld_tuple(hpp, szp, 2, erts_bld_uint(hpp, szp, stats[(i * 2) + 0]), erts_bld_uint(hpp, szp, stats[(i * 2) + 1]));
+	}
+	res = erts_bld_list(hpp, szp, num_stats, terms);
+	if (hpp) {
+	    erts_free(ERTS_ALC_T_TMP, stats);
+	    erts_de_runlock(dep);
+	    BIF_RET(res);
+	}
+	hp = HAlloc(BIF_P, sz);
+	szp = NULL;
+	hpp = &hp;
+    }
 }
 
 BIF_RETTYPE

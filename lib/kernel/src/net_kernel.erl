@@ -61,6 +61,7 @@
 	 getopts/2,
 	 add_filter/4,
 	 del_filter/3,
+	 dist_info/1,
 	 set_filter/3,
 	 set_handler/3,
 	 test_filter/3,
@@ -880,6 +881,20 @@ handle_call({add_filter, Node, Type, Value, Action}, From, State) ->
 	case ets:lookup(sys_dist, Node) of
 	    [Conn] when Conn#connection.state =:= up ->
 		case call_owner(Conn#connection.owner, {add_filter, Type, Value, Action}) of
+		    {ok, Ret} -> Ret;
+		    _ -> {error, noconnection}
+		end;
+
+	    _ ->
+		{error, noconnection}
+    end,
+    async_reply({reply, Return, State}, From);
+
+handle_call({dist_info, Node}, From, State) ->
+    Return =
+	case ets:lookup(sys_dist, Node) of
+	    [Conn] when Conn#connection.state =:= up ->
+		case call_owner(Conn#connection.owner, {dist_info}) of
 		    {ok, Ret} -> Ret;
 		    _ -> {error, noconnection}
 		end;
@@ -2418,6 +2433,9 @@ add_filter(Node, Type, Value, Action) ->
 
 del_filter(Node, Type, Value) ->
     request({del_filter, Node, Type, Value}).
+
+dist_info(Node) ->
+    request({dist_info, Node}).
 
 set_filter(Node, Type, Action) ->
     request({set_filter, Node, Type, Action}).
