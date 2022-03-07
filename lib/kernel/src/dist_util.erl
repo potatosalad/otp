@@ -509,6 +509,7 @@ connection(#hs_data{other_node = Node,
 			      HSData#hs_data.mf_getopts,
 			      HSData#hs_data.mf_add_filter,
 			      HSData#hs_data.mf_del_filter,
+			      HSData#hs_data.mf_dist_info,
 			      HSData#hs_data.mf_set_filter,
 			      HSData#hs_data.mf_set_handler,
 			      HSData#hs_data.mf_test_filter},
@@ -628,6 +629,16 @@ del_filter(DHandle, _Socket, undefined, OpType, Value) ->
 del_filter(_DHandle, Socket, MFDelFilter, OpType, Value) ->
     MFDelFilter(Socket, OpType, Value).
 
+dist_info(DHandle, _Socket, undefined) ->
+    try
+	erlang:dist_info(DHandle)
+    catch
+	erlang:badarg:_ ->
+	    {error, {badarg, [dist_info]}}
+    end;
+dist_info(_DHandle, Socket, MFDistInfo) ->
+    MFDistInfo(Socket).
+
 set_filter(DHandle, _Socket, undefined, OpType, Action) ->
     try
 	erlang:dist_set_filter(DHandle, OpType, Action)
@@ -659,7 +670,7 @@ test_filter(_DHandle, Socket, MFTestFilter, OpType, Value) ->
     MFTestFilter(Socket, OpType, Value).
 
 con_loop({Kernel, Node, Socket, Type, DHandle, MFTick, MFGetstat,
-          MFSetOpts, MFGetOpts, MFAddFilter, MFDelFilter,
+          MFSetOpts, MFGetOpts, MFAddFilter, MFDelFilter, MFDistInfo,
 	  MFSetFilter, MFSetHandler, MFTestFilter}=ConData,
 	 Tick) ->
     receive
@@ -716,6 +727,10 @@ con_loop({Kernel, Node, Socket, Type, DHandle, MFTick, MFGetstat,
 	    con_loop(ConData, Tick);
 	{From, Ref, {del_filter, OpType, Value}} ->
 	    Ret = del_filter(DHandle, Socket, MFDelFilter, OpType, Value),
+	    From ! {Ref, Ret},
+	    con_loop(ConData, Tick);
+	{From, Ref, {dist_info}} ->
+	    Ret = dist_info(DHandle, Socket, MFDistInfo),
 	    From ! {Ref, Ret},
 	    con_loop(ConData, Tick);
 	{From, Ref, {set_filter, OpType, Action}} ->

@@ -37,6 +37,8 @@ Hash erts_dist_table;
 Hash erts_node_table;
 erts_rwmtx_t erts_dist_table_rwmtx;
 erts_rwmtx_t erts_node_table_rwmtx;
+DistFilterStat erts_dist_filter_stat_accept;
+DistFilterStat erts_dist_filter_stat_reject;
 
 DistEntry *erts_hidden_dist_entries;
 DistEntry *erts_visible_dist_entries;
@@ -257,6 +259,25 @@ dist_table_cmp(void *dep1, void *dep2)
 	    ? 0 : 1);
 }
 
+static ERTS_INLINE void
+dist_filter_stat_init(DistFilterStat *stat)
+{
+    erts_atomic64_init_nob(&stat->link, 0);
+    erts_atomic64_init_nob(&stat->reg_send, 0);
+    erts_atomic64_init_nob(&stat->group_leader, 0);
+    erts_atomic64_init_nob(&stat->monitor, 0);
+    erts_atomic64_init_nob(&stat->demonitor, 0);
+    erts_atomic64_init_nob(&stat->send, 0);
+    erts_atomic64_init_nob(&stat->exit, 0);
+    erts_atomic64_init_nob(&stat->exit2, 0);
+    erts_atomic64_init_nob(&stat->monitor_exit, 0);
+    erts_atomic64_init_nob(&stat->spawn_request, 0);
+    erts_atomic64_init_nob(&stat->spawn_reply, 0);
+    erts_atomic64_init_nob(&stat->unlink, 0);
+    erts_atomic64_init_nob(&stat->unlink_ack, 0);
+    erts_atomic64_init_nob(&stat->alias_send, 0);
+}
+
 static void*
 dist_table_alloc(void *dep_tmpl)
 {
@@ -310,6 +331,8 @@ dist_table_alloc(void *dep_tmpl)
     hf.meta_free  = (HMFREE_FUN) 	erts_free;
     hf.meta_print = (HMPRINT_FUN) 	erts_print;
     hash_init(ERTS_ALC_T_DIST_FILTER, &dep->filters, "dist_filters", 11, hf);
+    dist_filter_stat_init(&dep->filter_stat_accept);
+    dist_filter_stat_init(&dep->filter_stat_reject);
 
     dep->mld                            = NULL;
 
@@ -1228,6 +1251,9 @@ void erts_init_node_tables(int dd_sec)
     f.alloc = (HALLOC_FUN) 			node_table_alloc;
     f.free  = (HFREE_FUN)  			node_table_free;
     hash_init(ERTS_ALC_T_NODE_TABLE, &erts_node_table, "node_table", 11, f);
+
+    dist_filter_stat_init(&erts_dist_filter_stat_accept);
+    dist_filter_stat_init(&erts_dist_filter_stat_reject);
 
     erts_hidden_dist_entries				= NULL;
     erts_visible_dist_entries				= NULL;

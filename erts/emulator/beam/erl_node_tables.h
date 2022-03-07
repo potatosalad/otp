@@ -145,6 +145,23 @@ typedef struct dist_filter_ {
     DistFilterData data;
 } DistFilter;
 
+typedef struct dist_filter_stat_ {
+    erts_atomic64_t link;
+    erts_atomic64_t reg_send;
+    erts_atomic64_t group_leader;
+    erts_atomic64_t monitor;
+    erts_atomic64_t demonitor;
+    erts_atomic64_t send;
+    erts_atomic64_t exit;
+    erts_atomic64_t exit2;
+    erts_atomic64_t monitor_exit;
+    erts_atomic64_t spawn_request;
+    erts_atomic64_t spawn_reply;
+    erts_atomic64_t unlink;
+    erts_atomic64_t unlink_ack;
+    erts_atomic64_t alias_send;
+} DistFilterStat;
+
 /*
  * Lock order:
  *   1. dist_entry->rwmtx
@@ -181,6 +198,8 @@ struct dist_entry_ {
     Eterm spawn_request_handler;
     Eterm alias_send_handler;
     Hash filters;
+    DistFilterStat filter_stat_accept;
+    DistFilterStat filter_stat_reject;
 
     ErtsMonLnkDist *mld;        /* Monitors and links */
 
@@ -265,6 +284,8 @@ extern Hash erts_dist_table;
 extern Hash erts_node_table;
 extern erts_rwmtx_t erts_dist_table_rwmtx;
 extern erts_rwmtx_t erts_node_table_rwmtx;
+extern DistFilterStat erts_dist_filter_stat_accept;
+extern DistFilterStat erts_dist_filter_stat_reject;
 
 extern DistEntry *erts_hidden_dist_entries;
 extern DistEntry *erts_visible_dist_entries;
