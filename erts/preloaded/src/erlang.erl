@@ -245,6 +245,7 @@
 -export([monotonic_time/0, monotonic_time/1]).
 -export([system_time/0, system_time/1]).
 -export([convert_time_unit/3]).
+-export([random_integer/0, random_integer/1]).
 -export([unique_integer/0, unique_integer/1]).
 -export([time_offset/0, time_offset/1, timestamp/0]).
 -export([process_display/2]).
@@ -1580,6 +1581,16 @@ ports() ->
 -spec erlang:posixtime_to_universaltime(P1) -> {calendar:date(), calendar:time()} when
       P1 :: integer().
 posixtime_to_universaltime(_P1) ->
+    erlang:nif_error(undefined).
+
+-spec erlang:random_integer() -> pos_integer().
+
+random_integer() ->
+    erlang:nif_error(undefined).
+
+-spec erlang:random_integer(Range :: pos_integer()) -> pos_integer().
+
+random_integer(_Range) ->
     erlang:nif_error(undefined).
 
 -spec erlang:unique_integer(ModifierList) -> integer() when

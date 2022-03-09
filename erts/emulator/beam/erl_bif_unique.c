@@ -1061,6 +1061,68 @@ erts_debug_get_unique_monotonic_integer_state(Process *c_p)
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\
+ * Random Integer                                                    *
+\*                                                                   */
+
+#define UINT58MASK (Uint64)(0x3ffffffffffffff)
+
+static Uint64 splitmix64_seed = 0;
+
+static ERTS_INLINE Uint64
+splitmix64_next(void)
+{
+    Uint64 z = (splitmix64_seed += 0x9e3779b97f4a7c15);
+    z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+    z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+    return z ^ (z >> 31);
+}
+
+static Uint64 xoroshiro116plus_rand[2] = {0, 0};
+
+static ERTS_INLINE Uint64
+xoroshiro116plus_rotl58(const Uint64 x, int k)
+{
+    return ((x << k) & UINT58MASK) | (x >> (58 - k));
+}
+
+static ERTS_INLINE Uint64
+xoroshiro116plus_next(Uint64 *s0p, Uint64 *s1p)
+{
+    const Uint64 s0 = *s0p;
+    Uint64 s1 = *s1p;
+    const Uint64 result = (s0 + s1) & UINT58MASK;
+
+    s1 ^= s0;
+    *s0p = xoroshiro116plus_rotl58(s0, 24) ^ s1 ^ ((s1 << 2) & UINT58MASK); // a, b
+    *s1p = xoroshiro116plus_rotl58(s1, 35); // c
+
+    return result;
+}
+
+static ERTS_INLINE void
+xoroshiro116plus_jump(Uint64 *s0p, Uint64 *s1p)
+{
+    static const Uint64 JUMP[] = {0x4a11293241fcb12a, 0x0009863200f83fcd};
+
+    Uint64 s0 = 0;
+    Uint64 s1 = 0;
+    int i;
+    int b;
+
+    for (i = 0; i < sizeof(JUMP) / sizeof(*JUMP); i++) {
+	for (b = 0; b < 64; b++) {
+	    if (JUMP[i] & (1 << b)) {
+		s0 ^= *s0p;
+		s1 ^= *s1p;
+	    }
+	    (void)xoroshiro116plus_next(s0p, s1p);
+	}
+    }
+    *s0p = s0;
+    *s1p = s1;
+}
+
+/* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\
  * Initilazation                                                     *
 \*                                                                   */
 
@@ -1070,6 +1132,8 @@ erts_bif_unique_init(void)
     init_reference();
     init_unique_monotonic_integer();
     init_unique_integer();
+    xoroshiro116plus_rand[0] = splitmix64_next();
+    xoroshiro116plus_rand[1] = splitmix64_next();
 }
 
 void
@@ -1077,6 +1141,9 @@ erts_sched_bif_unique_init(ErtsSchedulerData *esdp)
 {
     esdp->unique = (Uint64) 0;
     esdp->ref = (Uint64) ref_init_value;
+    (void)xoroshiro116plus_jump(&xoroshiro116plus_rand[0], &xoroshiro116plus_rand[1]);
+    esdp->rand[0] = xoroshiro116plus_rand[0];
+    esdp->rand[1] = xoroshiro116plus_rand[1];
 }
 
 /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *\
@@ -1096,6 +1163,50 @@ BIF_RETTYPE make_ref_0(BIF_ALIST_0)
     res = erts_sched_make_ref_in_buffer(erts_proc_sched_data(BIF_P), hp);
 
     BIF_RET(res);
+}
+
+BIF_RETTYPE random_integer_0(BIF_ALIST_0)
+{
+    ErtsSchedulerData *esdp;
+    Uint64 random_integer;
+
+    esdp = erts_proc_sched_data(BIF_P);
+    random_integer = xoroshiro116plus_next(&esdp->rand[0], &esdp->rand[1]);
+    BIF_RET(make_small((Uint) random_integer));
+}
+
+BIF_RETTYPE random_integer_1(BIF_ALIST_1)
+{
+    Eterm range = BIF_ARG_1;
+    Uint64 n;
+    Uint64 max_minus_n;
+    ErtsSchedulerData *esdp;
+    Uint64 v = 0;
+    Uint64 i = 0;
+
+    if (is_not_small(range))
+	BIF_ERROR(BIF_P, BADARG);
+
+    n = (Uint64) unsigned_val(range);
+
+    if (n == 0 || n > UINT58MASK)
+	BIF_ERROR(BIF_P, BADARG);
+
+    max_minus_n = 1 + UINT58MASK - n;
+    esdp = erts_proc_sched_data(BIF_P);
+    while (v == 0) {
+	v = xoroshiro116plus_next(&esdp->rand[0], &esdp->rand[1]);
+	if (v < n)
+	    v += 1;
+	else {
+	    i = v % n;
+	    if ((v - i) <= max_minus_n)
+		v = i + 1;
+	    else
+		v = 0;
+	}
+    }
+    BIF_RET(make_small((Uint) v));
 }
 
 BIF_RETTYPE unique_integer_0(BIF_ALIST_0)

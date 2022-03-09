@@ -709,6 +709,7 @@ struct ErtsSchedulerData_ {
     Uint32 thr_id;
     Uint64 unique;
     Uint64 ref;
+    Uint64 rand[2];
 
     struct {
 	Uint64 out;
