@@ -910,13 +910,16 @@ spawn_init({M, F, A}) ->
 dist_spawn_request(_Node, _MFA, _Opts, _Type) ->
     erlang:nif_error(undef).
 
--spec dist_spawn_init(MFA) -> Res when
+-spec dist_spawn_init(Opts) -> Res when
+      Opts :: {Handler, Node, MFA},
+      Handler :: module(),
+      Node :: node(),
       MFA :: {Module, Function, non_neg_integer()},
       Module :: module(),
       Function :: atom(),
       Res :: term().
 
-dist_spawn_init(MFA) ->
+dist_spawn_init(Opts) ->
     %%
     %% The argument list is passed as a message
     %% to the newly created process. This since
@@ -933,10 +936,13 @@ dist_spawn_init(MFA) ->
     %% guaranteed to be the first message in the
     %% message queue.
     %%
+    {Handler, Node, MFA} = Opts,
     {M, F, _NoA} = MFA,
     receive
-        A ->
-            erlang:apply(M, F, A)
+        A when Handler =:= undefined ->
+            erlang:apply(M, F, A);
+	A ->
+	    Handler:dist_spawn_init(Node, M, F, A)
     end.
 
 %%

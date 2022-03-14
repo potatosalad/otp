@@ -52,7 +52,13 @@
          dist_ctrl_get_data_notification/1,
          dist_ctrl_get_opt/2,
          dist_ctrl_set_opt/3,
-         dist_get_stat/1]).
+         dist_get_stat/1,
+         dist_add_filter/4,
+         dist_del_filter/3,
+         dist_info/1,
+         dist_set_filter/3,
+         dist_set_handler/3,
+         dist_test_filter/3]).
 
 -deprecated([{now,0,
               "see the \"Time and Time Correction in Erlang\" "
@@ -3775,6 +3781,23 @@ dist_ctrl_get_opt(_DHandle, _Opt) ->
 dist_get_stat(_DHandle) ->
     erlang:nif_error(undefined).
 
+dist_add_filter(_DHandle, _Type, _Value, _Action) ->
+    erlang:nif_error(undefined).
+
+dist_del_filter(_DHandle, _Type, _Value) ->
+    erlang:nif_error(undefined).
+
+dist_info(_DHandle) ->
+    erlang:nif_error(undefined).
+
+dist_set_filter(_DHandle, _Type, _Action) ->
+    erlang:nif_error(undefined).
+
+dist_set_handler(_DHandle, _Type, _Handler) ->
+    erlang:nif_error(undefined).
+
+dist_test_filter(_DHandle, _Type, _Action) ->
+    erlang:nif_error(undefined).
 
 dmonitor_node(Node, _Flag, []) ->
     %% Only called when auto-connect attempt failed early in VM

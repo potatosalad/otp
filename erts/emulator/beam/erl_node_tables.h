@@ -120,6 +120,48 @@ typedef struct {
 
 struct ErtsProcList_;
 
+enum dist_filter_type {
+    ERTS_DEF_TYPE_REG_SEND,
+    ERTS_DEF_TYPE_SPAWN_REQUEST,
+};
+
+typedef struct dist_filter_data_ {
+    enum dist_filter_type t;
+    union {
+	struct {
+	    Eterm name;
+	} reg_send;
+	struct {
+	    Eterm mod;
+	    Eterm fun;
+	    Uint arity;
+	} spawn_request;
+    } u;
+} DistFilterData;
+
+typedef struct dist_filter_ {
+    HashBucket hack_bucket;
+    Uint action;
+    DistFilterData data;
+} DistFilter;
+
+typedef struct dist_filter_stat_ {
+    erts_atomic64_t link;
+    erts_atomic64_t reg_send;
+    erts_atomic64_t group_leader;
+    erts_atomic64_t monitor;
+    erts_atomic64_t demonitor;
+    erts_atomic64_t send;
+    erts_atomic64_t exit;
+    erts_atomic64_t exit2;
+    erts_atomic64_t monitor_exit;
+    erts_atomic64_t spawn_request;
+    erts_atomic64_t spawn_reply;
+    erts_atomic64_t unlink;
+    erts_atomic64_t unlink_ack;
+    erts_atomic64_t alias_send;
+} DistFilterStat;
+
 /*
  * Lock order:
  *   1. dist_entry->rwmtx
@@ -148,6 +190,16 @@ struct dist_entry_ {
     Uint64 dflags;		/* Distribution flags, like hidden,
 				   atom cache etc. */
     Uint32 opts;
+    Eterm link_handler;
+    Eterm reg_send_handler;
+    Eterm group_leader_handler;
+    Eterm monitor_handler;
+    Eterm send_handler;
+    Eterm spawn_request_handler;
+    Eterm alias_send_handler;
+    Hash filters;
+    DistFilterStat filter_stat_accept;
+    DistFilterStat filter_stat_reject;
 
     ErtsMonLnkDist *mld;        /* Monitors and links */
 
@@ -232,6 +284,8 @@ extern Hash erts_dist_table;
 extern Hash erts_node_table;
 extern erts_rwmtx_t erts_dist_table_rwmtx;
 extern erts_rwmtx_t erts_node_table_rwmtx;
+extern DistFilterStat erts_dist_filter_stat_accept;
+extern DistFilterStat erts_dist_filter_stat_reject;
 
 extern DistEntry *erts_hidden_dist_entries;
 extern DistEntry *erts_visible_dist_entries;
@@ -274,6 +328,10 @@ DistEntry *erts_dhandle_to_dist_entry(Eterm dhandle, Uint32* connection_id);
 #define ERTS_DHANDLE_SIZE (3+ERTS_MAGIC_REF_THING_SIZE)
 Eterm erts_build_dhandle(Eterm **hpp, ErlOffHeap*, DistEntry*, Uint32 conn_id);
 Eterm erts_make_dhandle(Process *c_p, DistEntry*, Uint32 conn_id);
+
+DistFilter *erts_find_or_insert_dist_filter(DistEntry *dep, DistFilterData data);
+DistFilter *erts_find_dist_filter(DistEntry *dep, DistFilterData data);
+int erts_delete_dist_filter(DistEntry *dep, DistFilterData data);
 
 ERTS_GLB_INLINE void erts_init_node_entry(ErlNode *np, erts_aint_t val);
 #ifdef ERL_NODE_BOOKKEEP

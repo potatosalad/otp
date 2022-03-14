@@ -73,11 +73,13 @@ atom abort
 atom abs_path
 atom absoluteURI
 atom ac
+atom accept
 atom access
 atom active
 atom active_tasks
 atom active_tasks_all
 atom alias
+atom alias_send
 atom alive
 atom all
 atom all_but_first
@@ -226,11 +228,13 @@ atom dirty_nif_finalizer
 atom disable_trace
 atom disabled
 atom discard
+atom display
 atom dist
 atom dist_cmd
 atom dist_ctrl_put_data
 atom dist_ctrlr
 atom dist_data
+atom dist_filter
 atom dist_spawn_init
 atom Div='/'
 atom div
@@ -241,6 +245,7 @@ atom dollar_endonly
 atom dotall
 atom driver
 atom driver_options
+atom drop
 atom dsend_continue_trap
 atom duplicate_bag
 atom duplicated
@@ -293,6 +298,7 @@ atom extra
 atom false
 atom fcgi
 atom fd
+atom filter
 atom first
 atom firstline
 atom flags
@@ -583,6 +589,8 @@ atom reductions
 atom refc
 atom register
 atom registered_name
+atom reg_send
+atom reject
 atom reload
 atom rem
 atom reply

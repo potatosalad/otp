@@ -213,7 +213,14 @@ extern int erts_is_alive;
 #define ERTS_DSIG_PREP_PENDING	        4
 
 /* dist_ctrl_{g,s}et_option/2 */
-#define ERTS_DIST_CTRL_OPT_GET_SIZE     ((Uint32) (1 << 0))
+#define ERTS_DIST_CTRL_OPT_GET_SIZE           ((Uint32) (1 << 0))
+#define ERTS_DIST_CTRL_OPT_DROP_LINK          ((Uint32) (1 << 1))
+#define ERTS_DIST_CTRL_OPT_DROP_REG_SEND      ((Uint32) (1 << 2))
+#define ERTS_DIST_CTRL_OPT_DROP_GROUP_LEADER  ((Uint32) (1 << 3))
+#define ERTS_DIST_CTRL_OPT_DROP_MONITOR       ((Uint32) (1 << 4))
+#define ERTS_DIST_CTRL_OPT_DROP_SEND          ((Uint32) (1 << 5))
+#define ERTS_DIST_CTRL_OPT_DROP_SPAWN_REQUEST ((Uint32) (1 << 6))
+#define ERTS_DIST_CTRL_OPT_DROP_ALIAS_SEND    ((Uint32) (1 << 7))
 
 /* for emulator internal testing... */
 extern int erts_dflags_test_remove_hopefull_flags;
@@ -433,6 +440,8 @@ extern int erts_dsig_prepare(ErtsDSigSendContext *,
                              int,
                              int,
                              int);
+
+extern Eterm erts_dist_filter_stats(Uint **hpp, Uint *szp, const DistFilterStat *accept, const DistFilterStat *reject);
 
 void erts_dist_print_procs_suspended_on_de(fmtfn_t to, void *to_arg);
 int erts_auto_connect(DistEntry* dep, Process *proc, ErtsProcLocks proc_locks);

@@ -37,6 +37,8 @@ Hash erts_dist_table;
 Hash erts_node_table;
 erts_rwmtx_t erts_dist_table_rwmtx;
 erts_rwmtx_t erts_node_table_rwmtx;
+DistFilterStat erts_dist_filter_stat_accept;
+DistFilterStat erts_dist_filter_stat_reject;
 
 DistEntry *erts_hidden_dist_entries;
 DistEntry *erts_visible_dist_entries;
@@ -133,6 +135,118 @@ is_in_de_list(DistEntry *dep, DistEntry *dep_list)
 #endif
 
 static HashValue
+dist_filter_hash(void *vfp)
+{
+    DistFilter *fp = (DistFilter *) vfp;
+    HashValue h;
+    HashValue k;
+    HashValue r;
+
+    switch (fp->data.t) {
+    case ERTS_DEF_TYPE_REG_SEND:
+	h = atom_tab(atom_val(fp->data.u.reg_send.name))->slot.bucket.hvalue;
+	r = hash_combine(fp->data.t, h);
+	break;
+    case ERTS_DEF_TYPE_SPAWN_REQUEST:
+	h = atom_tab(atom_val(fp->data.u.spawn_request.mod))->slot.bucket.hvalue;
+	k = atom_tab(atom_val(fp->data.u.spawn_request.fun))->slot.bucket.hvalue;
+	r = hash_combine(h, k);
+	r = hash_combine(r, fp->data.u.spawn_request.arity);
+	r = hash_combine(fp->data.t, r);
+	break;
+    default:
+	r = 0;
+	break;
+    }
+
+    return r;
+}
+
+static int
+dist_filter_cmp(void *vfp1, void *vfp2)
+{
+    DistFilter *fp1 = (DistFilter *) vfp1;
+    DistFilter *fp2 = (DistFilter *) vfp2;
+
+    if (fp1->data.t != fp2->data.t)
+	return 0;
+
+    switch (fp1->data.t) {
+    case ERTS_DEF_TYPE_REG_SEND:
+	return ((fp1->data.u.reg_send.name == fp2->data.u.reg_send.name) ? 0 : 1);
+    case ERTS_DEF_TYPE_SPAWN_REQUEST:
+	return ((fp1->data.u.spawn_request.mod == fp2->data.u.spawn_request.mod
+		 && fp1->data.u.spawn_request.fun == fp2->data.u.spawn_request.fun
+		 && fp1->data.u.spawn_request.arity == fp2->data.u.spawn_request.arity) ? 0 : 1);
+    default:
+	return 0;
+    }
+}
+
+static void *
+dist_filter_alloc(void *vfp_tmpl)
+{
+    DistFilter *fp_tmpl = (DistFilter *) vfp_tmpl;
+    DistFilter *fp;
+
+    fp = (DistFilter *) erts_alloc(ERTS_ALC_T_DIST_FILTER, sizeof(DistFilter));
+    fp->action = fp_tmpl->action;
+    fp->data = fp_tmpl->data;
+
+    return (void *) fp;
+}
+
+static void
+dist_filter_free(void *vfp)
+{
+    (void)erts_free(ERTS_ALC_T_DIST_FILTER, vfp);
+}
+
+DistFilter *
+erts_find_or_insert_dist_filter(DistEntry *dep, DistFilterData data)
+{
+    DistFilter *fp;
+    DistFilter f;
+
+    f.action = 0;
+    f.data = data;
+
+    fp = hash_get(&dep->filters, (void *) &f);
+    if (fp)
+	return fp;
+
+    fp = hash_put(&dep->filters, (void *) &f);
+    ASSERT(fp);
+    return fp;
+}
+
+DistFilter *
+erts_find_dist_filter(DistEntry *dep, DistFilterData data)
+{
+    DistFilter *fp;
+    DistFilter f;
+
+    f.action = 0;
+    f.data = data;
+
+    fp = hash_get(&dep->filters, (void *) &f);
+    return fp;
+}
+
+int
+erts_delete_dist_filter(DistEntry *dep, DistFilterData data)
+{
+    DistFilter *fp;
+    DistFilter f;
+
+    f.action = 0;
+    f.data = data;
+
+    fp = hash_erase(&dep->filters, (void *) &f);
+    return (fp == NULL) ? 0 : 1;
+}
+
+static HashValue
 dist_table_hash(void *dep)
 {
     return atom_tab(atom_val(((DistEntry *) dep)->sysname))->slot.bucket.hvalue;
@@ -145,6 +259,25 @@ dist_table_cmp(void *dep1, void *dep2)
 	    ? 0 : 1);
 }
 
+static ERTS_INLINE void
+dist_filter_stat_init(DistFilterStat *stat)
+{
+    erts_atomic64_init_nob(&stat->link, 0);
+    erts_atomic64_init_nob(&stat->reg_send, 0);
+    erts_atomic64_init_nob(&stat->group_leader, 0);
+    erts_atomic64_init_nob(&stat->monitor, 0);
+    erts_atomic64_init_nob(&stat->demonitor, 0);
+    erts_atomic64_init_nob(&stat->send, 0);
+    erts_atomic64_init_nob(&stat->exit, 0);
+    erts_atomic64_init_nob(&stat->exit2, 0);
+    erts_atomic64_init_nob(&stat->monitor_exit, 0);
+    erts_atomic64_init_nob(&stat->spawn_request, 0);
+    erts_atomic64_init_nob(&stat->spawn_reply, 0);
+    erts_atomic64_init_nob(&stat->unlink, 0);
+    erts_atomic64_init_nob(&stat->unlink_ack, 0);
+    erts_atomic64_init_nob(&stat->alias_send, 0);
+}
+
 static void*
 dist_table_alloc(void *dep_tmpl)
 {
@@ -152,6 +285,7 @@ dist_table_alloc(void *dep_tmpl)
     Eterm sysname;
     Binary *bin;
     DistEntry *dep;
+    HashFunctions hf;
     erts_rwmtx_opt_t rwmtx_opt = ERTS_RWMTX_OPT_DEFAULT_INITER;
     rwmtx_opt.type = ERTS_RWMTX_TYPE_FREQUENT_READ;
 
@@ -181,6 +315,24 @@ dist_table_alloc(void *dep_tmpl)
     dep->suspended_nodeup               = NULL;
     dep->dflags				= 0;
     dep->opts                           = 0;
+    dep->link_handler			= am_undefined;
+    dep->reg_send_handler		= am_undefined;
+    dep->group_leader_handler		= am_undefined;
+    dep->monitor_handler		= am_undefined;
+    dep->send_handler			= am_undefined;
+    dep->spawn_request_handler		= am_undefined;
+    dep->alias_send_handler		= am_undefined;
+
+    hf.hash       = (H_FUN)		dist_filter_hash;
+    hf.cmp        = (HCMP_FUN)		dist_filter_cmp;
+    hf.alloc      = (HALLOC_FUN)	dist_filter_alloc;
+    hf.free       = (HFREE_FUN)		dist_filter_free;
+    hf.meta_alloc = (HMALLOC_FUN) 	erts_alloc;
+    hf.meta_free  = (HMFREE_FUN) 	erts_free;
+    hf.meta_print = (HMPRINT_FUN) 	erts_print;
+    hash_init(ERTS_ALC_T_DIST_FILTER, &dep->filters, "dist_filters", 11, hf);
+    dist_filter_stat_init(&dep->filter_stat_accept);
+    dist_filter_stat_init(&dep->filter_stat_reject);
 
     dep->mld                            = NULL;
 
@@ -249,6 +401,8 @@ dist_table_free(void *vdep)
 
     ASSERT(erts_no_of_not_connected_dist_entries > 0);
     erts_no_of_not_connected_dist_entries--;
+
+    hash_delete(&dep->filters);
 
     ASSERT(!dep->cache);
     erts_rwmtx_destroy(&dep->rwmtx);
@@ -664,6 +818,13 @@ erts_set_dist_entry_not_connected(DistEntry *dep)
     dep->state = ERTS_DE_STATE_IDLE;
     dep->dflags = 0;
     dep->opts = 0;
+    dep->link_handler = am_undefined;
+    dep->reg_send_handler = am_undefined;
+    dep->group_leader_handler = am_undefined;
+    dep->monitor_handler = am_undefined;
+    dep->send_handler = am_undefined;
+    dep->spawn_request_handler = am_undefined;
+    dep->alias_send_handler = am_undefined;
     dep->prev = NULL;
     dep->cid = NIL;
 
@@ -1090,6 +1251,9 @@ void erts_init_node_tables(int dd_sec)
     f.alloc = (HALLOC_FUN) 			node_table_alloc;
     f.free  = (HFREE_FUN)  			node_table_free;
     hash_init(ERTS_ALC_T_NODE_TABLE, &erts_node_table, "node_table", 11, f);
+
+    dist_filter_stat_init(&erts_dist_filter_stat_accept);
+    dist_filter_stat_init(&erts_dist_filter_stat_reject);
 
     erts_hidden_dist_entries				= NULL;
     erts_visible_dist_entries				= NULL;

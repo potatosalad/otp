@@ -3924,6 +3924,24 @@ BIF_RETTYPE statistics_1(BIF_ALIST_1)
 	    szp = NULL;
 	    hpp = &hp;
 	}
+    } else if (BIF_ARG_1 == am_dist_filter) {
+	Eterm res;
+	Eterm *hp;
+	Eterm **hpp;
+	Uint sz;
+	Uint *szp;
+	sz = 0;
+	szp = &sz;
+	hpp = NULL;
+	while (1) {
+	    res = erts_dist_filter_stats(hpp, szp, &erts_dist_filter_stat_accept, &erts_dist_filter_stat_reject);
+	    if (hpp) {
+		BIF_RET(res);
+	    }
+	    hp = HAlloc(BIF_P, sz);
+	    szp = NULL;
+	    hpp = &hp;
+	}
     }
     BIF_ERROR(BIF_P, BADARG);
 }
