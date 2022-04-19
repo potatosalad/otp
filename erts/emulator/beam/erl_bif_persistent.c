@@ -471,14 +471,49 @@ BIF_RETTYPE persistent_term_get_0(BIF_ALIST_0)
     }
 }
 
+#define DETECT_TABLE_CHANGE_SHORT_STALL (100000)
+#define DETECT_TABLE_CHANGE_LONG_STALL (10000000)
+
+static int
+detect_table_change(const char *label, Eterm key, HashTable *old_table, Uint old_entry_index, Eterm old_term)
+{
+    HashTable *new_table;
+    Eterm new_term;
+    int i;
+
+    new_table = (HashTable *) erts_atomic_read_nob(&the_hash_table);
+
+    if (old_table != new_table) {
+        new_term = get_bucket(new_table, lookup(new_table, key));
+        for (i = 0; i < DETECT_TABLE_CHANGE_LONG_STALL; i++) {
+            __asm__ __volatile__("pause" ::: "memory");
+            new_table = (HashTable *) erts_atomic_read_nob(&the_hash_table);
+        }
+        if (old_term != new_term || old_term != get_bucket(new_table, lookup(new_table, key))) {
+            erts_printf("%p [%s] ", (void *)ethr_self(), label);
+            erts_printf("the_hash_table: %p -> %p, old_table->term: %T -> %T, new_table->term: %T -> %T\n", old_table, new_table, old_term, get_bucket(old_table, old_entry_index), new_term, get_bucket(new_table, lookup(new_table, key)));
+        }
+        return 1;
+    }
+
+    return 0;
+}
+
 BIF_RETTYPE persistent_term_get_1(BIF_ALIST_1)
 {
     Eterm key = BIF_ARG_1;
     HashTable* hash_table = (HashTable *) erts_atomic_read_nob(&the_hash_table);
     Uint entry_index;
     Eterm term;
+    int i;
 
     entry_index = lookup(hash_table, key);
+    term = get_bucket(hash_table, entry_index);
+    for (i = 0; i < DETECT_TABLE_CHANGE_SHORT_STALL; i++) {
+        __asm__ __volatile__("pause" ::: "memory");
+        if (detect_table_change("persistent_term:get/1", key, hash_table, entry_index, term))
+            break;
+    }
     term = get_bucket(hash_table, entry_index);
     if (is_boxed(term)) {
         ASSERT(is_tuple_arity(term, 2));
@@ -494,8 +529,15 @@ BIF_RETTYPE persistent_term_get_2(BIF_ALIST_2)
     HashTable* hash_table = (HashTable *) erts_atomic_read_nob(&the_hash_table);
     Uint entry_index;
     Eterm term;
+    int i;
 
     entry_index = lookup(hash_table, key);
+    term = get_bucket(hash_table, entry_index);
+    for (i = 0; i < DETECT_TABLE_CHANGE_SHORT_STALL; i++) {
+        __asm__ __volatile__("pause" ::: "memory");
+        if (detect_table_change("persistent_term:get/2", key, hash_table, entry_index, term))
+            break;
+    }
     term = get_bucket(hash_table, entry_index);
     if (is_boxed(term)) {
         ASSERT(is_tuple_arity(term, 2));
