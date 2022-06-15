@@ -182,7 +182,7 @@ int erts_dflags_test_remove_hopefull_flags;
 
 Export spawn_request_yield_export;
 
-ErtsDistMsgStats erts_dist_msg_stats;
+// ErtsDistMsgStats erts_dist_msg_stats;
 
 /* distribution trap functions */
 Export* dmonitor_node_trap = NULL;
@@ -1073,17 +1073,17 @@ trap_function(Eterm func, int arity)
 
 static BIF_RETTYPE spawn_request_yield_3(BIF_ALIST_3);
 
-static void
-init_dist_msg_stats(void)
-{
-    for (int i = 0; i < ERTS_NUM_OF_DIST_MSG_TYPES; i++)
-        for (int j = 0; j < ERTS_NUM_OF_DIST_MSG_ACTIONS; j++)
-            erts_atomic64_init_nob(&erts_dist_msg_stats.counters[i][j], 0);
-}
+// static void
+// init_dist_msg_stats(void)
+// {
+//     for (int i = 0; i < ERTS_NUM_OF_DIST_MSG_TYPES; i++)
+//         for (int j = 0; j < ERTS_NUM_OF_DIST_MSG_ACTIONS; j++)
+//             erts_atomic64_init_nob(&erts_dist_msg_stats.counters[i][j], 0);
+// }
 
 void init_dist(void)
 {
-    init_dist_msg_stats();
+    // init_dist_msg_stats();
     init_nodes_monitors();
 
 #ifdef ERTS_DIST_MSG_DBG_FILE
@@ -1332,7 +1332,12 @@ Eterm erts_dsend_export_trap_context(Process* p, ErtsDSigSendContext* ctx)
 int
 erts_dsig_send_link(ErtsDSigSendContext *ctx, Eterm local, Eterm remote)
 {
-    Eterm ctl = TUPLE3(&ctx->ctl_heap[0], make_small(DOP_LINK), local, remote);
+    Eterm ctl;
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_LINK][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_LINK][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_LINK][ERTS_DIST_MSG_ACTION_SEND]);
+    ctl = TUPLE3(&ctx->ctl_heap[0], make_small(DOP_LINK), local, remote);
     return dsig_send_ctl(ctx, ctl);
 }
 
@@ -1342,6 +1347,10 @@ erts_dsig_send_unlink(ErtsDSigSendContext *ctx, Eterm local, Eterm remote, Uint6
     Eterm big_heap[ERTS_MAX_UINT64_HEAP_SIZE];
     Eterm unlink_id;    
     Eterm ctl;
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_UNLINK][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK][ERTS_DIST_MSG_ACTION_SEND]);
     if (ctx->dflags & DFLAG_UNLINK_ID) {
         if (IS_USMALL(0, id))
             unlink_id = make_small(id);
@@ -1379,6 +1388,11 @@ erts_dsig_send_unlink_ack(ErtsDSigSendContext *ctx, Eterm local, Eterm remote, U
         return ERTS_DSIG_SEND_OK;
     }
 
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_UNLINK_ACK][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK_ACK][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK_ACK][ERTS_DIST_MSG_ACTION_SEND]);
+
     if (IS_USMALL(0, id))
         unlink_id = make_small(id);
     else {
@@ -1405,6 +1419,11 @@ erts_dsig_send_m_exit(ErtsDSigSendContext *ctx, Eterm watcher, Eterm watched,
          */
         return ERTS_DSIG_SEND_OK;
     }
+
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_MONITOR_EXIT][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
 
     if (ctx->dep->dflags & DFLAG_EXIT_PAYLOAD) {
         ctl = TUPLE4(&ctx->ctl_heap[0], make_small(DOP_PAYLOAD_MONITOR_P_EXIT),
@@ -1438,6 +1457,11 @@ erts_dsig_send_monitor(ErtsDSigSendContext *ctx, Eterm watcher, Eterm watched,
         return ERTS_DSIG_SEND_OK;
     }
 
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_MONITOR][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR][ERTS_DIST_MSG_ACTION_SEND]);
+
     ctl = TUPLE4(&ctx->ctl_heap[0],
 		 make_small(DOP_MONITOR_P),
 		 watcher, watched, ref);
@@ -1460,6 +1484,11 @@ erts_dsig_send_demonitor(ErtsDSigSendContext *ctx, Eterm watcher,
          */
         return ERTS_DSIG_SEND_OK;
     }
+
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_DEMONITOR][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_DEMONITOR][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_DEMONITOR][ERTS_DIST_MSG_ACTION_SEND]);
 
     ctl = TUPLE4(&ctx->ctl_heap[0],
 		 make_small(DOP_DEMONITOR_P),
@@ -1535,17 +1564,29 @@ erts_dsig_send_msg(ErtsDSigSendContext* ctx, Eterm remote, Eterm message)
         send_token = (token != NIL && can_send_seqtrace_token(ctx, token));
 
         if (is_external_ref(remote)) {
+            if (ctx->dep->distacc)
+                ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_ALIAS_SEND][ERTS_DISTACC_MSG_ACTION_SEND]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_ALIAS_SEND][ERTS_DIST_MSG_ACTION_SEND]);
+            // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_ALIAS_SEND][ERTS_DIST_MSG_ACTION_SEND]);
             dist_op = make_small(send_token ?
                                  DOP_ALIAS_SEND_TT :
                                  DOP_ALIAS_SEND);
             sender_id = sender->common.id;
         }
         else if (ctx->dflags & DFLAG_SEND_SENDER) {
+            if (ctx->dep->distacc)
+                ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SEND][ERTS_DISTACC_MSG_ACTION_SEND]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_SEND]);
+            // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_SEND]);
             dist_op = make_small(send_token ?
                                  DOP_SEND_SENDER_TT :
                                  DOP_SEND_SENDER);
             sender_id = sender->common.id;
         } else {
+            if (ctx->dep->distacc)
+                ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SEND][ERTS_DISTACC_MSG_ACTION_SEND]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_SEND]);
+            // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_SEND]);
             dist_op = make_small(send_token ?
                                  DOP_SEND_TT :
                                  DOP_SEND);
@@ -1609,6 +1650,11 @@ erts_dsig_send_reg_msg(ErtsDSigSendContext* ctx, Eterm remote_name,
     }
 #endif
 
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_REG_SEND][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_REG_SEND][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_REG_SEND][ERTS_DIST_MSG_ACTION_SEND]);
+
     if (token != NIL && can_send_seqtrace_token(ctx, token))
 	ctl = TUPLE5(&ctx->ctl_heap[0], make_small(DOP_REG_SEND_TT),
 		     sender->common.id, am_Empty, remote_name, token);
@@ -1641,6 +1687,11 @@ erts_dsig_send_exit_tt(ErtsDSigSendContext *ctx, Process *c_p, Eterm remote,
     DTRACE_CHARBUF(remote_name, 128);
     DTRACE_CHARBUF(reason_str, 128);
 #endif
+
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_EXIT][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
 
     if (ctx->dep->dflags & DFLAG_EXIT_PAYLOAD)
         msg = reason;
@@ -1688,6 +1739,11 @@ erts_dsig_send_exit(ErtsDSigSendContext *ctx, Eterm local, Eterm remote, Eterm r
 {
     Eterm ctl, msg = ctx->dep->dflags & DFLAG_EXIT_PAYLOAD ? reason : THE_NON_VALUE;
 
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_EXIT][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_SEND]);
+
     if (ctx->dep->dflags & DFLAG_EXIT_PAYLOAD) {
         ctl = TUPLE3(&ctx->ctl_heap[0], make_small(DOP_PAYLOAD_EXIT), local, remote);
         msg = reason;
@@ -1702,6 +1758,11 @@ int
 erts_dsig_send_exit2(ErtsDSigSendContext *ctx, Eterm local, Eterm remote, Eterm reason)
 {
     Eterm ctl, msg;
+
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_EXIT2][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT2][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT2][ERTS_DIST_MSG_ACTION_SEND]);
 
     if (ctx->dep->dflags & DFLAG_EXIT_PAYLOAD) {
         ctl = TUPLE3(&ctx->ctl_heap[0],
@@ -1722,6 +1783,11 @@ erts_dsig_send_group_leader(ErtsDSigSendContext *ctx, Eterm leader, Eterm remote
 {
     Eterm ctl;
 
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_GROUP_LEADER][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_GROUP_LEADER][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_GROUP_LEADER][ERTS_DIST_MSG_ACTION_SEND]);
+
     ctl = TUPLE3(&ctx->ctl_heap[0],
 		 make_small(DOP_GROUP_LEADER), leader, remote);
 
@@ -1733,6 +1799,10 @@ dsig_send_spawn_request(ErtsDSigSendContext *ctx, Eterm ref, Eterm from,
                         Eterm gl, Eterm mfa, Eterm alist, Eterm opts)
 {
     Process *sender = ctx->c_p;
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SPAWN_REQUEST][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REQUEST][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REQUEST][ERTS_DIST_MSG_ACTION_SEND]);
     if (!have_seqtrace(SEQ_TRACE_TOKEN(sender))) {
         ctx->ctl = TUPLE6(&ctx->ctl_heap[0], make_small(DOP_SPAWN_REQUEST),
                           ref, from, gl, mfa, opts);
@@ -1775,6 +1845,10 @@ erts_dsig_send_spawn_reply(ErtsDSigSendContext *ctx,
                            Eterm result,
                            Eterm token)
 {
+    if (ctx->dep->distacc)
+        ctx->dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SPAWN_REPLY][ERTS_DISTACC_MSG_ACTION_SEND]++;
+    // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REPLY][ERTS_DIST_MSG_ACTION_SEND]);
+    // erts_atomic64_inc_nob(&ctx->dep->msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REPLY][ERTS_DIST_MSG_ACTION_SEND]);
     if (!have_seqtrace(token)) {
         ctx->ctl = TUPLE5(&ctx->ctl_heap[0], make_small(DOP_SPAWN_REPLY),
                           ref, to, flags, result);
@@ -2117,7 +2191,9 @@ int erts_net_message(Port *prt,
         }
         else if (is_internal_pid(to)) {
             ErtsLinkData *ldp;
-            erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_LINK][ERTS_DIST_MSG_ACTION_ACCEPT]);
+            if (dep->distacc)
+                dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_LINK][ERTS_DISTACC_MSG_ACTION_RECV]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_LINK][ERTS_DIST_MSG_ACTION_RECV]);
             ldp = erts_link_external_create(ERTS_LNK_TYPE_DIST_PROC,
                                             to, from);
             ASSERT(ldp->dist.other.item == to);
@@ -2184,7 +2260,9 @@ int erts_net_message(Port *prt,
         if (is_not_internal_pid(to))
             goto invalid_message;
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK][ERTS_DIST_MSG_ACTION_RECV]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_UNLINK][ERTS_DISTACC_MSG_ACTION_RECV]++;
         erts_proc_sig_send_dist_unlink(dep, conn_id, from, to, id);
 	break;
     }
@@ -2211,7 +2289,9 @@ int erts_net_message(Port *prt,
         if (is_not_internal_pid(to))
             goto invalid_message;
 
-	erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK_ACK][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_UNLINK_ACK][ERTS_DISTACC_MSG_ACTION_RECV]++;
+	// erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_UNLINK_ACK][ERTS_DIST_MSG_ACTION_RECV]);
         erts_proc_sig_send_dist_unlink_ack(dep, conn_id, from, to, id);
 	break;
     }
@@ -2258,7 +2338,9 @@ int erts_net_message(Port *prt,
 
         if (is_internal_pid(pid)) {
             ErtsMonitorData *mdp;
-	    erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR][ERTS_DIST_MSG_ACTION_ACCEPT]);
+            if (dep->distacc)
+                dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_MONITOR][ERTS_DISTACC_MSG_ACTION_RECV]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR][ERTS_DIST_MSG_ACTION_RECV]);
             mdp = erts_monitor_create(ERTS_MON_TYPE_DIST_PROC,
                                       ref, watcher, pid, name,
                                       THE_NON_VALUE);
@@ -2311,7 +2393,9 @@ int erts_net_message(Port *prt,
             goto invalid_message;
 
         if (is_internal_pid(watched) || is_atom(watched)) {
-            erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_DEMONITOR][ERTS_DIST_MSG_ACTION_ACCEPT]);
+            if (dep->distacc)
+                dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_DEMONITOR][ERTS_DISTACC_MSG_ACTION_RECV]++;
+            // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_DEMONITOR][ERTS_DIST_MSG_ACTION_RECV]);
             if (is_internal_pid(watched)) {
                 erts_proc_sig_send_dist_demonitor(watcher, watched, ref);
             } else {
@@ -2368,7 +2452,9 @@ int erts_net_message(Port *prt,
 	if (is_not_pid(from) || is_not_atom(to)){
 	    goto invalid_message;
 	}
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_REG_SEND][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_REG_SEND][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_REG_SEND][ERTS_DIST_MSG_ACTION_RECV]);
 	rp = erts_whereis_process(NULL, 0, to, 0, 0);
 	if (rp) {
 	    ErtsProcLocks locks = 0;
@@ -2424,7 +2510,9 @@ int erts_net_message(Port *prt,
         to = tuple[3];
         if (is_not_pid(to))
             goto invalid_message;
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SEND][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SEND][ERTS_DIST_MSG_ACTION_RECV]);
         rp = erts_proc_lookup(to);
 
         if (rp) {
@@ -2458,7 +2546,9 @@ int erts_net_message(Port *prt,
         if (is_not_ref(to)) {
             goto invalid_message;
         }
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_ALIAS_SEND][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_ALIAS_SEND][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_ALIAS_SEND][ERTS_DIST_MSG_ACTION_RECV]);
         erts_proc_sig_send_dist_to_alias(from, to, edep, ede_hfrag, token);
         break;
         
@@ -2513,7 +2603,9 @@ int erts_net_message(Port *prt,
         }
 #endif
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR_EXIT][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_MONITOR_EXIT][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_MONITOR_EXIT][ERTS_DIST_MSG_ACTION_RECV]);
         erts_proc_sig_send_dist_monitor_down(
             dep, ref, watched, watcher, edep, ede_hfrag, reason);
 	break;
@@ -2575,7 +2667,9 @@ int erts_net_message(Port *prt,
         }
 #endif
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_EXIT][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT][ERTS_DIST_MSG_ACTION_RECV]);
         erts_proc_sig_send_dist_link_exit(dep,
                                           from, to, edep, ede_hfrag,
                                           reason, token);
@@ -2644,7 +2738,9 @@ int erts_net_message(Port *prt,
         }
 #endif
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT2][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_EXIT2][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_EXIT2][ERTS_DIST_MSG_ACTION_RECV]);
         erts_proc_sig_send_dist_exit(dep, from, to, edep, ede_hfrag, reason, token);
 	break;
     }
@@ -2658,7 +2754,9 @@ int erts_net_message(Port *prt,
 	    goto invalid_message;
 	}
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_GROUP_LEADER][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_GROUP_LEADER][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_GROUP_LEADER][ERTS_DIST_MSG_ACTION_RECV]);
         (void) erts_proc_sig_send_group_leader(NULL, to, from, NIL);
 	break;
 
@@ -2708,7 +2806,9 @@ int erts_net_message(Port *prt,
                 goto invalid_message;
         }
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REQUEST][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SPAWN_REQUEST][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REQUEST][ERTS_DIST_MSG_ACTION_RECV]);
         opts_error = erts_parse_spawn_opts(&so, opts, NULL, 0);
         if (opts_error) {
             ErtsDSigSendContext ctx;
@@ -2868,7 +2968,9 @@ int erts_net_message(Port *prt,
             }
         }
 
-        erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REPLY][ERTS_DIST_MSG_ACTION_ACCEPT]);
+        if (dep->distacc)
+            dep->distacc->counters[ERTS_DISTACC_MSG_TYPE_SPAWN_REPLY][ERTS_DISTACC_MSG_ACTION_RECV]++;
+        // erts_atomic64_inc_nob(&erts_dist_msg_stats.counters[ERTS_DIST_MSG_TYPE_SPAWN_REPLY][ERTS_DIST_MSG_ACTION_RECV]);
         if (!erts_proc_sig_send_dist_spawn_reply(dep->sysname, ref,
                                                  parent, lnk, result,
                                                  token)) {
@@ -3078,80 +3180,87 @@ retry:
     return res;
 }
 
-static ERTS_INLINE Eterm
-make_atom_from_dist_msg_type(const ErtsDistMsgType type)
-{
-    switch (type) {
-        case ERTS_DIST_MSG_TYPE_ALIAS_SEND:
-            return am_alias_send;
-        case ERTS_DIST_MSG_TYPE_DEMONITOR:
-            return am_demonitor;
-        case ERTS_DIST_MSG_TYPE_EXIT:
-            return am_exit;
-        case ERTS_DIST_MSG_TYPE_EXIT2:
-            return am_exit2;
-        case ERTS_DIST_MSG_TYPE_GROUP_LEADER:
-            return am_group_leader;
-        case ERTS_DIST_MSG_TYPE_LINK:
-            return am_link;
-        case ERTS_DIST_MSG_TYPE_MONITOR:
-            return am_monitor;
-        case ERTS_DIST_MSG_TYPE_MONITOR_EXIT:
-            return am_monitor_exit;
-        case ERTS_DIST_MSG_TYPE_REG_SEND:
-            return am_reg_send;
-        case ERTS_DIST_MSG_TYPE_SEND:
-            return am_send;
-        case ERTS_DIST_MSG_TYPE_SPAWN_REPLY:
-            return am_spawn_reply;
-        case ERTS_DIST_MSG_TYPE_SPAWN_REQUEST:
-            return am_spawn_request;
-        case ERTS_DIST_MSG_TYPE_UNLINK:
-            return am_unlink;
-        case ERTS_DIST_MSG_TYPE_UNLINK_ACK:
-            return am_unlink_ack;
-        default:
-            return am_undefined;
-    }
-}
+// static ERTS_INLINE Eterm
+// make_atom_from_dist_msg_type(const ErtsDistMsgType type)
+// {
+//     switch (type) {
+//         case ERTS_DIST_MSG_TYPE_ALIAS_SEND:
+//             return am_alias_send;
+//         case ERTS_DIST_MSG_TYPE_DEMONITOR:
+//             return am_demonitor;
+//         case ERTS_DIST_MSG_TYPE_EXIT:
+//             return am_exit;
+//         case ERTS_DIST_MSG_TYPE_EXIT2:
+//             return am_exit2;
+//         case ERTS_DIST_MSG_TYPE_GROUP_LEADER:
+//             return am_group_leader;
+//         case ERTS_DIST_MSG_TYPE_LINK:
+//             return am_link;
+//         case ERTS_DIST_MSG_TYPE_MONITOR:
+//             return am_monitor;
+//         case ERTS_DIST_MSG_TYPE_MONITOR_EXIT:
+//             return am_monitor_exit;
+//         case ERTS_DIST_MSG_TYPE_REG_SEND:
+//             return am_reg_send;
+//         case ERTS_DIST_MSG_TYPE_SEND:
+//             return am_send;
+//         case ERTS_DIST_MSG_TYPE_SPAWN_REPLY:
+//             return am_spawn_reply;
+//         case ERTS_DIST_MSG_TYPE_SPAWN_REQUEST:
+//             return am_spawn_request;
+//         case ERTS_DIST_MSG_TYPE_UNLINK:
+//             return am_unlink;
+//         case ERTS_DIST_MSG_TYPE_UNLINK_ACK:
+//             return am_unlink_ack;
+//         default:
+//             return am_undefined;
+//     }
+// }
 
-static ERTS_INLINE Eterm
-make_atom_from_dist_msg_action(const ErtsDistMsgAction action)
-{
-    switch (action) {
-        case ERTS_DIST_MSG_ACTION_ACCEPT:
-            return am_accept;
-        default:
-            return am_undefined;
-    }
-}
+// static ERTS_INLINE Eterm
+// make_atom_from_dist_msg_action(const ErtsDistMsgAction action)
+// {
+//     switch (action) {
+//         case ERTS_DIST_MSG_ACTION_RECV:
+//             return am_recv;
+//         case ERTS_DIST_MSG_ACTION_SEND:
+//             return am_send;
+//         default:
+//             return am_undefined;
+//     }
+// }
 
-Eterm
-erts_bld_dist_msg_stats(Uint **hpp, Uint *szp, const ErtsDistMsgStats *stats)
-{
-    ErtsDistMsgType type;
-    ErtsDistMsgAction action;
-    Uint64 value = 0;
-    Eterm type_keys[ERTS_NUM_OF_DIST_MSG_TYPES];
-    Eterm type_vals[ERTS_NUM_OF_DIST_MSG_TYPES];
-    Eterm action_keys[ERTS_NUM_OF_DIST_MSG_ACTIONS];
-    Eterm action_vals[ERTS_NUM_OF_DIST_MSG_ACTIONS];
-    Eterm res = THE_NON_VALUE;
+// Eterm
+// erts_bld_dist_msg_stats(ErtsHeapFactory *hfact, const ErtsDistMsgStats *stats)
+// {
+//     ErtsDistMsgType type;
+//     ErtsDistMsgAction action;
+//     Uint size = 0;
+//     Uint64 value = 0;
+//     Eterm *hp = NULL;
+//     Eterm type_keys[ERTS_NUM_OF_DIST_MSG_TYPES];
+//     Eterm type_vals[ERTS_NUM_OF_DIST_MSG_TYPES];
+//     Eterm action_keys[ERTS_NUM_OF_DIST_MSG_ACTIONS];
+//     Eterm action_vals[ERTS_NUM_OF_DIST_MSG_ACTIONS];
+//     Eterm res = THE_NON_VALUE;
 
-    for (action = (ErtsDistMsgAction) 0; action < ERTS_NUM_OF_DIST_MSG_ACTIONS; action++)
-        action_keys[action] = make_atom_from_dist_msg_action(action);
-    for (type = (ErtsDistMsgType) 0; type < ERTS_NUM_OF_DIST_MSG_TYPES; type++) {
-        type_keys[type] = make_atom_from_dist_msg_type(type);
-        for (action = (ErtsDistMsgAction) 0; action < ERTS_NUM_OF_DIST_MSG_ACTIONS; action++) {
-            if (hpp)
-                value = (Uint64) erts_atomic64_read_nob((erts_atomic64_t *)&stats->counters[type][action]);
-            action_vals[action] = erts_bld_uint64(hpp, szp, value);
-	}
-	type_vals[type] = erts_bld_2tup_list(hpp, szp, ERTS_NUM_OF_DIST_MSG_ACTIONS, action_keys, action_vals);
-    }
-    res = erts_bld_2tup_list(hpp, szp, ERTS_NUM_OF_DIST_MSG_TYPES, type_keys, type_vals);
-    return res;
-}
+//     for (action = (ErtsDistMsgAction) 0; action < ERTS_NUM_OF_DIST_MSG_ACTIONS; action++)
+//         action_keys[action] = make_atom_from_dist_msg_action(action);
+//     for (type = (ErtsDistMsgType) 0; type < ERTS_NUM_OF_DIST_MSG_TYPES; type++) {
+//         type_keys[type] = make_atom_from_dist_msg_type(type);
+//         for (action = (ErtsDistMsgAction) 0; action < ERTS_NUM_OF_DIST_MSG_ACTIONS; action++) {
+//             hp = NULL;
+//             size = 0;
+//             value = (Uint64) erts_atomic64_read_nob((erts_atomic64_t *) &stats->counters[type][action]);
+//             (void) erts_bld_uint64(NULL, &size, value);
+//             hp = erts_produce_heap(hfact, size, 0);
+//             action_vals[action] = erts_bld_uint64(&hp, NULL, value);
+//         }
+//         type_vals[type] = erts_map_from_ks_and_vs(hfact, action_keys, action_vals, (Uint) ERTS_NUM_OF_DIST_MSG_ACTIONS);
+//     }
+//     res = erts_map_from_ks_and_vs(hfact, type_keys, type_vals, (Uint) ERTS_NUM_OF_DIST_MSG_TYPES);
+//     return res;
+// }
 
 static
 void erts_schedule_dist_command(Port *prt, DistEntry *dist_entry)

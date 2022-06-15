@@ -44,6 +44,9 @@
    config.h when the emulator command line flags are modified by configure */
 #undef ERTS_EMU_CMDLINE_FLAGS
 
+/* Define as 1 if you want to enable dist accounting */
+#undef ERTS_ENABLE_DISTACC
+
 /* Define if you have kernel poll and want to use it */
 #undef ERTS_ENABLE_KERNEL_POLL
 

@@ -301,6 +301,19 @@ case "$with_microstate_accounting" in
     *) ;;
 esac
 
+AC_ARG_WITH(dist-accounting,
+AS_HELP_STRING([--with-dist-accounting={yes}],
+               [enable dist accounting])
+AS_HELP_STRING([--without-dist-accounting],
+               [don't enable dist accounting]),
+[],[with_dist_accounting=yes])
+
+case "$with_dist_accounting" in
+    yes) AC_DEFINE(ERTS_ENABLE_DISTACC,[1],
+		[Define as 1 if you want to enable dist accounting]) ;;
+    *) ;;
+esac
+
 dnl Magic test for clearcase.
 OTP_RELEASE=
 if test "${ERLANG_COMMERCIAL_BUILD}" != ""; then

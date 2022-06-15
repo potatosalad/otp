@@ -843,6 +843,7 @@ enable_vm_probes
 with_assumed_cache_line_size
 enable_systemd
 with_microstate_accounting
+with_dist_accounting
 enable_static_nifs
 enable_static_drivers
 with_ets_write_concurrency_locks
@@ -1630,6 +1631,10 @@ Optional Packages:
                           detailed states
   --without-microstate-accounting
                           don't enable microstate accounting
+  --with-dist-accounting={yes}
+                          enable dist accounting
+  --without-dist-accounting
+                          don't enable dist accounting
   --with-ets-write-concurrency-locks={8|16|32|64|128|256}
                           specify how many locks the write_concurrency option
                           for ets should use.
@@ -5183,6 +5188,23 @@ printf "%s\n" "#define ERTS_ENABLE_MSACC 1" >>confdefs.h
  ;;
     extra)
 printf "%s\n" "#define ERTS_ENABLE_MSACC 2" >>confdefs.h
+ ;;
+    *) ;;
+esac
+
+
+# Check whether --with-dist-accounting was given.
+if test ${with_dist_accounting+y}
+then :
+  withval=$with_dist_accounting;
+else $as_nop
+  with_dist_accounting=yes
+fi
+
+
+case "$with_dist_accounting" in
+    yes)
+printf "%s\n" "#define ERTS_ENABLE_DISTACC 1" >>confdefs.h
  ;;
     *) ;;
 esac

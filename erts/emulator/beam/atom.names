@@ -73,7 +73,6 @@ atom abort
 atom abs_path
 atom absoluteURI
 atom ac
-atom accept
 atom access
 atom active
 atom active_tasks
@@ -230,6 +229,7 @@ atom disable_trace
 atom disabled
 atom discard
 atom dist
+atom dist_accounting
 atom dist_cmd
 atom dist_ctrl_put_data
 atom dist_ctrlr
@@ -586,6 +586,7 @@ atom ready_output
 atom reason
 atom receive
 atom recent_size
+atom recv
 atom reductions
 atom refc
 atom reg_send

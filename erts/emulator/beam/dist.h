@@ -23,6 +23,7 @@
 
 #include "erl_process.h"
 #include "erl_node_tables.h"
+#include "erl_distacc.h"
 #include "zlib.h"
 
 #define DFLAG_PUBLISHED                ((Uint64)0x01)
@@ -131,7 +132,7 @@
 /*
  * opcodes used in distribution messages.
  * 
- * Keep in sync with the `ErtsDistMsgType' enum type below.
+ * Keep in sync with the `ErtsDistMsgType' enum type in `erl_node_tables.h'
  */
 enum dop {
     DOP_LINK                = 1,
@@ -174,50 +175,7 @@ enum dop {
     DOP_UNLINK_ID_ACK       = 36
 };
 
-typedef enum {
-    /* DOP_ALIAS_SEND, DOP_ALIAS_SEND_TT */
-    ERTS_DIST_MSG_TYPE_ALIAS_SEND = 0,
-    /* DOP_DEMONITOR_P */
-    ERTS_DIST_MSG_TYPE_DEMONITOR,
-    /* DOP_EXIT, DOP_EXIT_TT, DOP_PAYLOAD_EXIT, DOP_PAYLOAD_EXIT_TT */
-    ERTS_DIST_MSG_TYPE_EXIT,
-    /* DOP_EXIT2, DOP_EXIT2_TT, DOP_PAYLOAD_EXIT2, DOP_PAYLOAD_EXIT2_TT */
-    ERTS_DIST_MSG_TYPE_EXIT2,
-    /* DOP_GROUP_LEADER */
-    ERTS_DIST_MSG_TYPE_GROUP_LEADER,
-    /* DOP_LINK */
-    ERTS_DIST_MSG_TYPE_LINK,
-    /* DOP_MONITOR_P */
-    ERTS_DIST_MSG_TYPE_MONITOR,
-    /* DOP_MONITOR_P_EXIT, DOP_PAYLOAD_MONITOR_P_EXIT */
-    ERTS_DIST_MSG_TYPE_MONITOR_EXIT,
-    /* DOP_REG_SEND, DOP_REG_SEND_TT */
-    ERTS_DIST_MSG_TYPE_REG_SEND,
-    /* DOP_SEND, DOP_SEND_TT, DOP_SEND_SENDER, DOP_SEND_SENDER_TT */
-    ERTS_DIST_MSG_TYPE_SEND,
-    /* DOP_SPAWN_REPLY, DOP_SPAWN_REPLY_TT */
-    ERTS_DIST_MSG_TYPE_SPAWN_REPLY,
-    /* DOP_SPAWN_REQUEST, DOP_SPAWN_REQUEST_TT */
-    ERTS_DIST_MSG_TYPE_SPAWN_REQUEST,
-    /* DOP_UNLINK, DOP_UNLINK_ID */
-    ERTS_DIST_MSG_TYPE_UNLINK,
-    /* DOP_UNLINK_ID_ACK */
-    ERTS_DIST_MSG_TYPE_UNLINK_ACK,
-} ErtsDistMsgType;
-
-#define ERTS_NUM_OF_DIST_MSG_TYPES      (14)
-
-typedef enum {
-    ERTS_DIST_MSG_ACTION_ACCEPT = 0,
-} ErtsDistMsgAction;
-
-#define ERTS_NUM_OF_DIST_MSG_ACTIONS    (1)
-
-typedef struct dist_msg_stats_ {
-    erts_atomic64_t counters[ERTS_NUM_OF_DIST_MSG_TYPES][ERTS_NUM_OF_DIST_MSG_ACTIONS];
-} ErtsDistMsgStats;
-
-extern ErtsDistMsgStats erts_dist_msg_stats;
+// extern ErtsDistMsgStats erts_dist_msg_stats;
 
 #define ERTS_DIST_SPAWN_FLAG_LINK       (1 << 0)
 #define ERTS_DIST_SPAWN_FLAG_MONITOR    (1 << 1)
@@ -483,7 +441,7 @@ extern int erts_dsig_prepare(ErtsDSigSendContext *,
                              int,
                              int);
 
-extern Eterm erts_bld_dist_msg_stats(Uint **hpp, Uint *szp, const ErtsDistMsgStats *stats);
+// extern Eterm erts_bld_dist_msg_stats(ErtsHeapFactory *hfact, const ErtsDistMsgStats *stats);
 
 void erts_dist_print_procs_suspended_on_de(fmtfn_t to, void *to_arg);
 int erts_auto_connect(DistEntry* dep, Process *proc, ErtsProcLocks proc_locks);

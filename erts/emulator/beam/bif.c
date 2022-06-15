@@ -43,6 +43,7 @@
 #include "erl_bits.h"
 #include "erl_bif_unique.h"
 #include "erl_map.h"
+#include "erl_distacc.h"
 #include "erl_msacc.h"
 #include "erl_proc_sig_queue.h"
 #include "erl_fun.h"
@@ -62,6 +63,8 @@ static
 #endif
 Export dsend_continue_trap_export;
 Export *erts_convert_time_unit_trap = NULL;
+
+static erts_atomic32_t distacc;
 
 static Export *await_msacc_mod_trap = NULL;
 static erts_atomic32_t msacc;
@@ -5167,6 +5170,23 @@ BIF_RETTYPE system_flag_2(BIF_ALIST_2)
 	default:
 	    ERTS_INTERNAL_ERROR("Unknown state");
 	}
+#ifdef ERTS_ENABLE_DISTACC
+    } else if (BIF_ARG_1 == am_dist_accounting) {
+        if (BIF_ARG_2 == am_true) {
+            erts_aint32_t new = ERTS_DISTACC_ENABLE;
+            erts_aint32_t old = erts_atomic32_xchg_nob(&distacc, new);
+            Eterm res = erts_distacc_enable(BIF_P);
+            BIF_RET(res);
+        } else if (BIF_ARG_2 == am_false) {
+            erts_aint32_t new = ERTS_DISTACC_DISABLE;
+            erts_aint32_t old = erts_atomic32_xchg_nob(&distacc, new);
+            Eterm res = erts_distacc_disable(BIF_P);
+            BIF_RET(res);
+        } else if (BIF_ARG_2 == am_reset) {
+            Eterm res = erts_distacc_reset(BIF_P);
+            BIF_RET(res);
+        }
+#endif
 #ifdef ERTS_ENABLE_MSACC
     } else if (BIF_ARG_1 == am_microstate_accounting) {
       Eterm threads;
@@ -5513,6 +5533,7 @@ void erts_init_bif(void)
 	= erts_export_put(am_erts_internal, am_await_microstate_accounting_modifications, 3);
 
     erts_atomic32_init_nob(&sched_wall_time, 0);
+    erts_atomic32_init_nob(&distacc, ERTS_DISTACC_IS_ENABLED());
     erts_atomic32_init_nob(&msacc, ERTS_MSACC_IS_ENABLED());
 }
 

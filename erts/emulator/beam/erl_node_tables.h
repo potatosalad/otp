@@ -61,6 +61,7 @@ void erts_deref_dist_entry(DistEntry *dep);
 #include "erl_binary.h"
 #undef ERTS_BINARY_TYPES_ONLY__
 #include "erl_monitor_link.h"
+#include "erl_distacc.h"
 
 #define ERTS_NODE_TAB_DELAY_GC_DEFAULT (60)
 #define ERTS_NODE_TAB_DELAY_GC_MAX (100*1000*1000)
@@ -156,6 +157,7 @@ struct dist_entry_ {
     erts_atomic_t qsize;
     erts_atomic64_t in;
     erts_atomic64_t out;
+    ErtsDistAcc *distacc;
     ErtsDistOutputQueue out_queue;
     struct ErtsProcList_ *suspended;
 
@@ -172,6 +174,29 @@ struct dist_entry_ {
 
     struct dist_sequences *sequences; /* Ongoing distribution sequences */
 };
+
+#define ERTS_DE_ITER_FLAG_THIS          (1 << 0)
+#define ERTS_DE_ITER_FLAG_VISIBLE       (1 << 1)
+#define ERTS_DE_ITER_FLAG_HIDDEN        (1 << 2)
+#define ERTS_DE_ITER_FLAG_NOT_CONNECTED (1 << 3)
+#define ERTS_DE_ITER_FLAG_PENDING       (1 << 4)
+
+#define ERTS_DE_ITER_FLAG_CONNECTED     (ERTS_DE_ITER_FLAG_VISIBLE | ERTS_DE_ITER_FLAG_HIDDEN)
+#define ERTS_DE_ITER_FLAG_KNOWN         (ERTS_DE_ITER_FLAG_THIS | ERTS_DE_ITER_FLAG_VISIBLE | ERTS_DE_ITER_FLAG_HIDDEN | ERTS_DE_ITER_FLAG_NOT_CONNECTED | ERTS_DE_ITER_FLAG_PENDING)
+
+typedef void (*ERTS_DE_ITER_BEFORE_RUNLOCK_CB) (Process *c_p, void *state);
+typedef void (*ERTS_DE_ITER_FOREACH_CB) (Process *c_p, DistEntry *dep, void *state);
+typedef Eterm (*ERTS_DE_ITER_FINALIZE_CB) (Process *c_p, void *state);
+typedef void (*ERTS_DE_ITER_DTOR_CB) (Process *c_p, void *state);
+
+typedef struct dist_entry_foreach_init_ {
+    ERTS_DE_ITER_BEFORE_RUNLOCK_CB before_runlock_cb;
+    ERTS_DE_ITER_FOREACH_CB foreach_cb;
+    ERTS_DE_ITER_FINALIZE_CB finalize_cb;
+    ERTS_DE_ITER_DTOR_CB dtor_cb;
+    void *state;
+    int flags;
+} DistEntryForEachInit;
 
 /*
 #define ERL_NODE_BOOKKEEP
@@ -251,7 +276,18 @@ DistEntry *erts_channel_no_to_dist_entry(Uint);
 DistEntry *erts_sysname_to_connected_dist_entry(Eterm);
 DistEntry *erts_find_or_insert_dist_entry(Eterm);
 DistEntry *erts_find_dist_entry(Eterm);
-void erts_schedule_delete_dist_entry(DistEntry *);
+// NOTE: I think this is dead code, right?
+// See https://github.com/erlang/otp/commit/b17db5ae892a8b9c48f8f94f7219c60fe122f629
+// See https://github.com/erlang/otp/commit/4dcb2ae7810a507b701a30072b2f514cab7ebbdb
+// void erts_schedule_delete_dist_entry(DistEntry *);
+// extern DistEntryIter *erts_dist_entry_iter_alloc(int flags, int needs_lock);
+// extern void erts_dist_entry_iter_foreach(DistEntryIter *it);
+// extern void erts_dist_entry_iter_free(DistEntryIter *it);
+// typedef void (*DistTableForEachYieldingCb)(DistEntry *dep, void *state);
+// typedef Eterm (*DistTableForEachFinalizeFunc)(void *state);
+extern Eterm erts_dist_entry_foreach_blocking(Process *c_p, DistEntryForEachInit *init);
+// extern Eterm erts_dist_table_foreach_yielding(Process *c_p, DistTableForEachInit *init, void *state);
+// extern void erts_dist_entry_iter_release(DistEntryIter *);
 Uint erts_dist_table_size(void);
 void erts_dist_table_info(fmtfn_t, void *);
 void erts_set_dist_entry_not_connected(DistEntry *);

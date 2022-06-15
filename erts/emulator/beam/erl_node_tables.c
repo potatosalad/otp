@@ -63,7 +63,6 @@ static ErtsMonotonicTime node_tab_delete_delay;
 
 static void report_gc_active_dist_entry(Eterm sysname, enum dist_entry_state);
 
-
 /* -- The distribution table ---------------------------------------------- */
 
 #define ErtsBin2DistEntry(B) \
@@ -194,9 +193,16 @@ dist_table_alloc(void *dep_tmpl)
     erts_atomic_init_nob(&dep->qsize, 0);
     erts_atomic64_init_nob(&dep->in, 0);
     erts_atomic64_init_nob(&dep->out, 0);
+    dep->distacc                        = NULL;
     dep->out_queue.first		= NULL;
     dep->out_queue.last			= NULL;
     dep->suspended			= NULL;
+
+    if (erts_distacc_enabled == 1) {
+        dep->distacc = erts_alloc(ERTS_ALC_T_DISTACC, sizeof(ErtsDistAcc));
+        (void) sys_memzero((void *) dep->distacc, sizeof(ErtsDistAcc));
+        (void) erts_ref_dist_entry(dep);
+    }
 
     dep->tmp_out_queue.first    	= NULL;
     dep->tmp_out_queue.last     	= NULL;
@@ -372,6 +378,141 @@ DistEntry *erts_find_dist_entry(Eterm sysname)
      * Does NOT increase reference count!
      */
     return find_dist_entry(sysname, 0, 0);
+}
+
+typedef struct dist_entry_iter_t {
+    ERTS_DE_ITER_BEFORE_RUNLOCK_CB before_runlock_cb;
+    ERTS_DE_ITER_FOREACH_CB foreach_cb;
+    ERTS_DE_ITER_FINALIZE_CB finalize_cb;
+    ERTS_DE_ITER_DTOR_CB dtor_cb;
+    void *state;
+    DistEntry **begin;
+    DistEntry **end;
+    DistEntry **next;
+} DistEntryIter;
+
+static DistEntryIter *dist_entry_iter_alloc(Process *c_p, DistEntryForEachInit *init, int rlock_dist_table);
+static void dist_entry_iter_free(Process *c_p, DistEntryIter *it);
+
+DistEntryIter *
+dist_entry_iter_alloc(Process *c_p, DistEntryForEachInit *init, int rlock_dist_table)
+{
+    DistEntryIter *it = NULL;
+    DistEntry *dep = NULL;
+    Uint length = 0;
+
+    /* we copy a list of pointers here so that we do not have to lock
+       the erts_dist_table_rwmtx while iterating later */
+    if (rlock_dist_table)
+        (void) erts_rwmtx_rlock(&erts_dist_table_rwmtx);
+
+    ASSERT(erts_no_of_not_connected_dist_entries > 0);
+    ASSERT(erts_no_of_hidden_dist_entries >= 0);
+    ASSERT(erts_no_of_pending_dist_entries >= 0);
+    ASSERT(erts_no_of_visible_dist_entries >= 0);
+
+    if ((init->flags & ERTS_DE_ITER_FLAG_THIS) == ERTS_DE_ITER_FLAG_THIS)
+        length += 1;
+    if ((init->flags & ERTS_DE_ITER_FLAG_VISIBLE) == ERTS_DE_ITER_FLAG_VISIBLE)
+        length += erts_no_of_visible_dist_entries;
+    if ((init->flags & ERTS_DE_ITER_FLAG_HIDDEN) == ERTS_DE_ITER_FLAG_HIDDEN)
+        length += erts_no_of_hidden_dist_entries;
+    if ((init->flags & ERTS_DE_ITER_FLAG_NOT_CONNECTED) == ERTS_DE_ITER_FLAG_NOT_CONNECTED)
+        length += (erts_no_of_not_connected_dist_entries - 1);
+    if ((init->flags & ERTS_DE_ITER_FLAG_PENDING) == ERTS_DE_ITER_FLAG_PENDING)
+        length += erts_no_of_pending_dist_entries;
+
+    if (c_p == NULL)
+        it = erts_alloc(ERTS_ALC_T_TMP, sizeof(DistEntryIter) + (sizeof(DistEntry) * length));
+    else
+        abort();
+
+    it->before_runlock_cb = init->before_runlock_cb;
+    it->foreach_cb = init->foreach_cb;
+    it->finalize_cb = init->finalize_cb;
+    it->dtor_cb = init->dtor_cb;
+    it->state = init->state;
+    it->begin = NULL;
+    it->end = NULL;
+    it->next = (DistEntry **) (((void *) it) + sizeof(DistEntryIter));
+    it->begin = it->next;
+
+    if ((init->flags & ERTS_DE_ITER_FLAG_THIS) == ERTS_DE_ITER_FLAG_THIS) {
+        (void) erts_ref_dist_entry(erts_this_dist_entry);
+        *(it->next++) = erts_this_dist_entry;
+    }
+    if ((init->flags & ERTS_DE_ITER_FLAG_VISIBLE) == ERTS_DE_ITER_FLAG_VISIBLE) {
+        for (dep = erts_visible_dist_entries; dep; dep = dep->next) {
+            (void) erts_ref_dist_entry(dep);
+            *(it->next++) = dep;
+        }
+    }
+    if ((init->flags & ERTS_DE_ITER_FLAG_HIDDEN) == ERTS_DE_ITER_FLAG_HIDDEN) {
+        for (dep = erts_hidden_dist_entries; dep; dep = dep->next) {
+            (void) erts_ref_dist_entry(dep);
+            *(it->next++) = dep;
+        }
+    }
+    if ((init->flags & ERTS_DE_ITER_FLAG_NOT_CONNECTED) == ERTS_DE_ITER_FLAG_NOT_CONNECTED) {
+        for (dep = erts_not_connected_dist_entries; dep; dep = dep->next) {
+            if (dep != erts_this_dist_entry) {
+                (void) erts_ref_dist_entry(dep);
+                *(it->next++) = dep;
+            }
+        }
+    }
+    if ((init->flags & ERTS_DE_ITER_FLAG_PENDING) == ERTS_DE_ITER_FLAG_PENDING) {
+        for (dep = erts_pending_dist_entries; dep; dep = dep->next) {
+            (void) erts_ref_dist_entry(dep);
+            *(it->next++) = dep;
+        }
+    }
+
+    it->end = it->next;
+    it->next = it->begin;
+
+    if (it->before_runlock_cb != NULL)
+        (void) it->before_runlock_cb(c_p, it->state);
+
+    if (rlock_dist_table)
+        (void) erts_rwmtx_runlock(&erts_dist_table_rwmtx);
+
+    return it;
+}
+
+void
+dist_entry_iter_free(Process *c_p, DistEntryIter *it)
+{
+    DistEntry *dep = NULL;
+
+    while (it->next < it->end) {
+        dep = *(it->next++);
+        (void) erts_deref_dist_entry(dep);
+    }
+    if (it->dtor_cb != NULL)
+        (void) it->dtor_cb(c_p, it->state);
+    if (c_p == NULL)
+        (void) erts_free(ERTS_ALC_T_TMP, (void *) it);
+}
+
+Eterm
+erts_dist_entry_foreach_blocking(Process *c_p, DistEntryForEachInit *init)
+{
+    DistEntryIter *it = NULL;
+    DistEntry *dep = NULL;
+    Eterm res = THE_NON_VALUE;
+
+    it = dist_entry_iter_alloc(NULL, init, 1);
+    while (it->next < it->end) {
+        dep = *(it->next++);
+        if (it->foreach_cb != NULL)
+            (void) it->foreach_cb(c_p, dep, it->state);
+        (void) erts_deref_dist_entry(dep);
+    }
+    if (it->finalize_cb != NULL)
+        res = it->finalize_cb(c_p, it->state);
+    (void) dist_entry_iter_free(c_p, it);
+    return res;
 }
 
 DistEntry *
@@ -1064,6 +1205,8 @@ void erts_init_node_tables(int dd_sec)
     erts_rwmtx_opt_t rwmtx_opt = ERTS_RWMTX_OPT_DEFAULT_INITER;
     HashFunctions f;
     ErlNode node_tmpl;
+
+    (void) erts_distacc_init();
 
     if (dd_sec == ERTS_NODE_TAB_DELAY_GC_INFINITY)
 	node_tab_delete_delay = (ErtsMonotonicTime) -1;

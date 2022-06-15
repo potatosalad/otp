@@ -3942,23 +3942,28 @@ BIF_RETTYPE statistics_1(BIF_ALIST_1)
 	    szp = NULL;
 	    hpp = &hp;
 	}
-    } else if (BIF_ARG_1 == am_dist) {
-        Eterm res;
-        Eterm *hp;
-        Eterm **hpp;
-        Uint sz;
-        Uint *szp;
-        sz = 0;
-        szp = &sz;
-        hpp = NULL;
-        while (1) {
-            res = erts_bld_dist_msg_stats(hpp, szp, &erts_dist_msg_stats);
-            if (hpp)
+#ifdef ERTS_ENABLE_DISTACC
+    } else if (BIF_ARG_1 == am_dist_accounting) {
+        // ErtsHeapFactory factory;
+        Eterm res = erts_distacc_gather(BIF_P, 0);
+        // (void) erts_factory_proc_init(&factory, BIF_P);
+        // res = erts_bld_dist_msg_stats(&factory, &erts_dist_msg_stats);
+        // (void) erts_factory_close(&factory);
+        BIF_RET(res);
+#endif
+    } else if (is_tuple_arity(BIF_ARG_1, 2)) {
+        Eterm *tp = tuple_val(BIF_ARG_1);
+#ifdef ERTS_ENABLE_DISTACC
+        if (tp[1] == am_dist_accounting) {
+            if (tp[2] == am_global) {
+                Eterm res = erts_distacc_gather(BIF_P, 1);
                 BIF_RET(res);
-            hp = HAlloc(BIF_P, sz);
-            szp = NULL;
-            hpp = &hp;
+            } else if (is_node_name_atom(tp[2])) {
+                Eterm res = erts_distacc_node_stats(BIF_P, tp[2]);
+                BIF_RET(res);
+            }
         }
+#endif
     }
     BIF_ERROR(BIF_P, BADARG);
 }
