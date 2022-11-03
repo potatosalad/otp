@@ -91,6 +91,8 @@ static ERL_NIF_TERM atom_port;
 static ERL_NIF_TERM atom_send;
 static ERL_NIF_TERM atom_lookup;
 static ERL_NIF_TERM atom_badarg;
+static ERL_NIF_TERM atom_latin1;
+static ERL_NIF_TERM atom_utf8;
 
 typedef struct
 {
@@ -280,6 +282,8 @@ static int load(ErlNifEnv* env, void** priv_data, ERL_NIF_TERM load_info)
     atom_send = enif_make_atom(env, "send");
     atom_lookup = enif_make_atom(env, "lookup");
     atom_badarg = enif_make_atom(env, "badarg");
+    atom_latin1 = enif_make_atom(env, "latin1");
+    atom_utf8 = enif_make_atom(env, "utf8");
 
     *priv_data = data;
     return 0;
@@ -784,28 +788,80 @@ static ERL_NIF_TERM string_to_bin(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
 {
     ErlNifBinary obin;
     unsigned size;
+    ErlNifCharEncoding encoding;
     int n;
-    if (!enif_get_int(env,argv[1],(int*)&size) 
-	|| !enif_alloc_binary(size,&obin)) {
-	return enif_make_badarg(env);
+    if (argc != 3
+        || !(argv[2] == atom_latin1 || argv[2] == atom_utf8)
+        || !enif_get_int(env, argv[1], (int *)&size)
+        || !enif_alloc_binary(size, &obin)) {
+        return enif_make_badarg(env);
     }
-    n = enif_get_string(env, argv[0], (char*)obin.data, size, ERL_NIF_LATIN1);
-    return enif_make_tuple(env, 2, enif_make_int(env,n),
-			   enif_make_binary(env,&obin));
+    if (argv[2] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[2] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    n = enif_get_string(env, argv[0], (char *)obin.data, size, encoding);
+    return enif_make_tuple(env, 2, enif_make_int(env, n),
+                           enif_make_binary(env, &obin));
+}
+
+static ERL_NIF_TERM string_length(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    unsigned size;
+    ErlNifCharEncoding encoding;
+    if (!(argv[1] == atom_latin1 || argv[1] == atom_utf8)) {
+        return enif_make_badarg(env);
+    }
+    if (argv[1] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[1] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    if (!enif_get_string_length(env, argv[0], &size, encoding)) {
+        return enif_make_badarg(env);
+    }
+    return enif_make_uint(env, size);
 }
 
 static ERL_NIF_TERM atom_to_bin(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary obin;
     unsigned size;
+    ErlNifCharEncoding encoding;
     int n;
-    if (!enif_get_int(env,argv[1],(int*)&size) 
-	|| !enif_alloc_binary(size,&obin)) {
-	return enif_make_badarg(env);
+    if (argc != 3
+        || !(argv[2] == atom_latin1 || argv[2] == atom_utf8)
+        || !enif_get_int(env, argv[1], (int *)&size)
+        || !enif_alloc_binary(size,&obin)) {
+        return enif_make_badarg(env);
     }
-    n = enif_get_atom(env, argv[0], (char*)obin.data, size, ERL_NIF_LATIN1);
-    return enif_make_tuple(env, 2, enif_make_int(env,n),
-			   enif_make_binary(env,&obin));
+    if (argv[2] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[2] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    n = enif_get_atom(env, argv[0], (char *)obin.data, size, encoding);
+    return enif_make_tuple(env, 2, enif_make_int(env, n),
+                           enif_make_binary(env, &obin));
+}
+
+static ERL_NIF_TERM atom_length(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    unsigned size;
+    ErlNifCharEncoding encoding;
+    if (!(argv[1] == atom_latin1 || argv[1] == atom_utf8)) {
+        return enif_make_badarg(env);
+    }
+    if (argv[1] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[1] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    if (!enif_get_atom_length(env, argv[0], &size, encoding)) {
+        return enif_make_badarg(env);
+    }
+    return enif_make_uint(env, size);
 }
 
 static ERL_NIF_TERM macros(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -1141,6 +1197,52 @@ static ERL_NIF_TERM make_atoms(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv
 
     return enif_make_tuple7(env,
 			    arr[0],arr[1],arr[2],arr[3],arr[4],arr[5],arr[6]);
+}
+
+static ERL_NIF_TERM make_new_atom(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    ErlNifBinary name_bin;
+    ErlNifCharEncoding encoding;
+    ERL_NIF_TERM atom_term;
+
+    if (argc != 2
+        || !(argv[1] == atom_latin1 || argv[1] == atom_utf8)
+        || !enif_inspect_binary(env, argv[0], &name_bin)) {
+        return enif_make_badarg(env);
+    }
+    if (argv[1] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[1] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    if (!enif_make_new_atom_len(env, (void *)name_bin.data, name_bin.size, &atom_term, encoding)) {
+        return enif_make_badarg(env);
+    }
+
+    return atom_term;
+}
+
+static ERL_NIF_TERM make_existing_atom(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    ErlNifBinary name_bin;
+    ErlNifCharEncoding encoding;
+    ERL_NIF_TERM atom_term;
+
+    if (argc != 2
+        || !(argv[1] == atom_latin1 || argv[1] == atom_utf8)
+        || !enif_inspect_binary(env, argv[0], &name_bin)) {
+        return enif_make_badarg(env);
+    }
+    if (argv[1] == atom_latin1) {
+        encoding = ERL_NIF_LATIN1;
+    } else if (argv[1] == atom_utf8) {
+        encoding = ERL_NIF_UTF8;
+    }
+    if (!enif_make_existing_atom_len(env, (void *)name_bin.data, name_bin.size, &atom_term, encoding)) {
+        return enif_make_badarg(env);
+    }
+
+    return atom_term;
 }
 
 static ERL_NIF_TERM make_strings(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
@@ -3716,8 +3818,10 @@ static ErlNifFunc nif_funcs[] =
     {"many_args_100", 100, many_args_100},
     {"clone_bin", 1, clone_bin},
     {"make_sub_bin", 3, make_sub_bin},
-    {"string_to_bin", 2, string_to_bin},
-    {"atom_to_bin", 2, atom_to_bin},
+    {"string_to_bin", 3, string_to_bin},
+    {"string_length", 2, string_length},
+    {"atom_to_bin", 3, atom_to_bin},
+    {"atom_length", 2, atom_length},
     {"macros", 1, macros},
     {"tuple_2_list_and_tuple",1,tuple_2_list_and_tuple},
     {"iolist_2_bin", 1, iolist_2_bin},
@@ -3732,6 +3836,8 @@ static ErlNifFunc nif_funcs[] =
     {"check_is_exception", 0, check_is_exception},
     {"length_test", 6, length_test},
     {"make_atoms", 0, make_atoms},
+    {"make_new_atom", 2, make_new_atom},
+    {"make_existing_atom", 2, make_existing_atom},
     {"make_strings", 0, make_strings},
     {"make_new_resource", 2, make_new_resource},
     {"make_new_resource_binary", 1, make_new_resource_binary},
