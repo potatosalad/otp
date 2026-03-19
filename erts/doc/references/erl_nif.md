@@ -1314,6 +1314,23 @@ Returns the number of bytes written (including terminating NUL byte), or
 
 Available since OTP R13B04
 
+## enif_get_atom_cache_index()
+
+```c
+int enif_get_atom_cache_index(
+        ErlNifEnv* env,
+        ERL_NIF_TERM atom,
+        unsigned* cache_index);
+```
+
+Writes the distribution output atom cache index of `atom` into `*cache_index`.
+Returns `1` on success, or `0` if `atom` is not an atom.
+
+The cache index is in the range `0` ..
+[`enif_max_atom_cache_index()`](erl_nif.md#enif_max_atom_cache_index).
+
+Available since OTP 29.0
+
 ## enif_get_atom_length()
 
 ```c
@@ -2990,6 +3007,16 @@ Returns `true` if the iterator is now positioned at a valid key-value entry, or
 `false` if the iterator is positioned at the head (before the first entry).
 
 Available since OTP 18.0
+
+## enif_max_atom_cache_index()
+
+```c
+int enif_max_atom_cache_index(void);
+```
+
+Returns the maximum distribution output atom cache index.
+
+Available since OTP 29.0
 
 ## enif_monitor_process()
 

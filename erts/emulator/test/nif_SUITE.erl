@@ -82,7 +82,8 @@
          pid/1,
          id/1,
          nif_term_type/1,
-         nif_term_size/1
+         nif_term_size/1,
+         nif_atom_cache_index/1
 	]).
 
 -export([many_args_100/100]).
@@ -199,6 +200,8 @@
        compare_pids_nif/2,
        term_type_nif/1,
        term_size_nif/1,
+       get_atom_cache_index_nif/1,
+       max_atom_cache_index_nif/0,
        dynamic_resource_call/4,
        msa_find_y_nif/1
       ]).
@@ -254,7 +257,8 @@ all() ->
      match_state_arg,
      pid,
      nif_term_type,
-     nif_term_size].
+     nif_term_size,
+     nif_atom_cache_index].
 
 init_per_suite(Config) ->
     erts_debug:set_internal_state(available_internal_state, true),
@@ -4543,6 +4547,20 @@ nif_term_size(Config) ->
     true = term_size_nif(<<"binary data">>) > 0,
     true = term_size_nif({tuple,<<"binary data">>,atom,[list]}) > 0.
 
+nif_atom_cache_index(Config) ->
+    ensure_lib_loaded(Config),
+    Max = max_atom_cache_index_nif(),
+    true = is_integer(Max),
+    true = Max > 0,
+    CIX = get_atom_cache_index_nif(hello),
+    true = is_integer(CIX),
+    true = CIX >= 0,
+    true = CIX =< Max,
+    %% non-atom returns badarg
+    {'EXIT', {badarg, _}} = (catch get_atom_cache_index_nif(42)),
+    {'EXIT', {badarg, _}} = (catch get_atom_cache_index_nif("string")),
+    ok.
+
 %% Verify match state arguments are not passed to declared NIFs.
 match_state_arg(Config) ->
     ensure_lib_loaded(Config),
@@ -4695,6 +4713,9 @@ compare_pids_nif(_, _) -> ?nif_stub.
 
 term_type_nif(_) -> ?nif_stub.
 term_size_nif(_) -> ?nif_stub.
+
+get_atom_cache_index_nif(_) -> ?nif_stub.
+max_atom_cache_index_nif() -> ?nif_stub.
 
 dynamic_resource_call(_,_,_,_) -> ?nif_stub.
 

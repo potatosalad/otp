@@ -47,6 +47,7 @@
 
 #include "sys.h"
 #include "global.h"
+#include "external.h"
 #include "erl_binary.h"
 #include "bif.h"
 #include "error.h"
@@ -1579,6 +1580,20 @@ ErlNifUInt64 enif_hash(ErlNifHash type, Eterm term, ErlNifUInt64 salt)
 size_t enif_term_size(Eterm term)
 {
     return size_object(term) * sizeof(ERL_NIF_TERM);
+}
+
+int enif_get_atom_cache_index(ErlNifEnv *env, ERL_NIF_TERM atom,
+                              unsigned *cache_index)
+{
+    if (!is_atom(atom))
+        return 0;
+    *cache_index = (unsigned)erts_debug_atom_to_out_cache_index(atom);
+    return 1;
+}
+
+int enif_max_atom_cache_index(void)
+{
+    return erts_debug_max_atom_out_cache_index();
 }
 
 int enif_get_tuple(ErlNifEnv* env, Eterm tpl, int* arity, const Eterm** array)

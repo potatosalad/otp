@@ -3860,6 +3860,23 @@ static ERL_NIF_TERM term_size_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM a
     return enif_make_uint64(env, enif_term_size(argv[0]));
 }
 
+static ERL_NIF_TERM get_atom_cache_index_nif(ErlNifEnv* env, int argc,
+                                             const ERL_NIF_TERM argv[])
+{
+    unsigned cache_index;
+    assert(argc == 1);
+    if (!enif_get_atom_cache_index(env, argv[0], &cache_index))
+        return enif_make_badarg(env);
+    return enif_make_uint(env, cache_index);
+}
+
+static ERL_NIF_TERM max_atom_cache_index_nif(ErlNifEnv* env, int argc,
+                                             const ERL_NIF_TERM argv[])
+{
+    assert(argc == 0);
+    return enif_make_int(env, enif_max_atom_cache_index());
+}
+
 static ERL_NIF_TERM msa_find_y_nif(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     ErlNifBinary bin;
@@ -3993,6 +4010,8 @@ static ErlNifFunc nif_funcs[] =
     {"compare_pids_nif", 2, compare_pids_nif},
     {"term_type_nif", 1, term_type_nif},
     {"term_size_nif", 1, term_size_nif},
+    {"get_atom_cache_index_nif", 1, get_atom_cache_index_nif},
+    {"max_atom_cache_index_nif", 0, max_atom_cache_index_nif},
     {"msa_find_y_nif", 1, msa_find_y_nif}
 };
 
